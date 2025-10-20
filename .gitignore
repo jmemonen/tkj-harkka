@@ -6,4 +6,4 @@ build
 Thumbs.db
 # Doxygen output
 libs/TKJHAT/docs/out/
-
+compile_commands.json
