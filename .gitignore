@@ -1,0 +1,9 @@
+build
+!.vscode/*
+.cache
+# OS-specific junk
+.DS_Store
+Thumbs.db
+# Doxygen output
+libs/TKJHAT/docs/out/
+
