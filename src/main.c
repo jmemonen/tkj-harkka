@@ -1,4 +1,5 @@
 
+#include <pico/types.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -9,6 +10,7 @@
 #include <task.h>
 #include <tusb.h>
 
+#include "portmacro.h"
 #include "tkjhat/sdk.h"
 #include "usbSerialDebug/helper.h"
 
@@ -23,6 +25,15 @@ static void usbTask(void *arg) {
   while (1) {
     tud_task(); // With FreeRTOS wait for events
                 // Do not add vTaskDelay.
+  }
+}
+
+// Reads the sensors.
+static void sensorTask(void *arg) {
+  (void)arg;
+  while (1) {
+    usb_serial_print("@sensorTask\n");
+    vTaskDelay(pdMS_TO_TICKS(1000));
   }
 }
 
@@ -52,7 +63,7 @@ int main() {
   init_hat_sdk();
   sleep_ms(300); // Wait some time so initialization of USB and hat is done.
 
-  TaskHandle_t myExampleTask, hUSB = NULL;
+  TaskHandle_t myExampleTask, hUSB, sensor = NULL;
 
   xTaskCreate(usbTask, "usb", 2048, NULL, 3, &hUSB);
 #if (configNUMBER_OF_CORES > 1)
@@ -70,9 +81,11 @@ int main() {
       &myExampleTask);    // (en) A handle to control the execution of this task
 
   if (result != pdPASS) {
-    printf("Example Task creation failed\n");
+    usb_serial_print("Example Task creation failed\n");
     return 0;
   }
+
+  result = xTaskCreate(sensorTask, "sensor", DEFAULT_STACK_SIZE, NULL, 2, &sensor);
 
   tusb_init();
   usb_serial_init();
