@@ -36,7 +36,7 @@ static void sensorTask(void *arg) {
     int sensorReading = hello_sensors();
     char s[6];
     snprintf(s, 6, "%d\n", sensorReading);
-    usb_serial_print("@sensorTask: %d\n");
+    usb_serial_print(s);
     vTaskDelay(pdMS_TO_TICKS(1000));
   }
 }
