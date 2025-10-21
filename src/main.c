@@ -1,3 +1,4 @@
+#include <pico/time.h>
 #include <string.h>
 
 #include <pico/stdlib.h>
@@ -35,22 +36,25 @@ static void sensorTask(void *arg) {
   (void)arg;
   char buf[MOTION_BUF_SIZE];
 
-  // init_ICM42670(); // TODO: check return value for errors...
-  // ICM42670_start_with_default_values();
+  // set_red_led_status(1);
 
-  while (!tud_mounted() || !tud_cdc_n_connected(1)) {
-    vTaskDelay(pdMS_TO_TICKS(50));
-  }
+  // ICM42670_startAccel(ICM42670_ACCEL_ODR_DEFAULT, ICM42670_ACCEL_FSR_DEFAULT);
+  // ICM42670_startGyro(ICM42670_GYRO_ODR_DEFAULT, ICM42670_GYRO_FSR_DEFAULT);
 
-  if (usb_serial_connected()) {
-    usb_serial_print("sensorTask started...");
-  }
-  usb_serial_flush();
+  // while (!tud_mounted() || !tud_cdc_n_connected(1)) {
+  //   vTaskDelay(pdMS_TO_TICKS(50));
+  // }
+  //
+  // if (usb_serial_connected()) {
+  //   usb_serial_print("sensorTask started...");
+  // }
+  // usb_serial_flush();
 
   motion_data.error = 0;
 
   while (1) {
     usb_serial_print("Hello from sensor task!");
+    usb_serial_flush();
     // int sensorReading = hello_sensors();
     // char s[6];
     // snprintf(s, 6, "%d\n", sensorReading);
@@ -61,12 +65,11 @@ static void sensorTask(void *arg) {
     // } else {
     //   usb_serial_print("No errors detected reading motion data.");
     // }
-    // sprintf(buf, "test:%.3f\n", motion_data.ax);
-    // usb_serial_print(buf);
-    // snprintf(buf, MOTION_BUF_SIZE, "ax:%.3f\n", motion_data.ax);
+    // usb_serial_flush();
     // format_motion_csv(&motion_data, buf, MOTION_BUF_SIZE);
     // usb_serial_print(buf);
-    //
+    // usb_serial_flush();
+
     vTaskDelay(pdMS_TO_TICKS(1000));
   }
 }
@@ -96,8 +99,13 @@ int main() {
       sleep_ms(10);
   }*/
   init_hat_sdk();
-  sleep_ms(300); // Wait some time so initialization of USB and hat is done.
+  sleep_ms(1000); // Wait some time so initialization of USB and hat is done.
+  init_i2c_default();
+  sleep_ms(1000); // Wait some time so initialization of USB and hat is done.
   init_red_led();
+  init_ICM42670(); // TODO: check return value for errors...
+  sleep_ms(1000);
+  ICM42670_start_with_default_values();
 
   TaskHandle_t myExampleTask, hUSB, sensor = NULL;
 
@@ -123,12 +131,6 @@ int main() {
 
   result =
       xTaskCreate(sensorTask, "sensor", DEFAULT_STACK_SIZE, NULL, 2, &sensor);
-
-  if (result != pdPASS) {
-    usb_serial_print("Sensor Task creation failed\n");
-    blink_led(6);
-    return 0;
-  }
 
   // Apparently these should be right before the scheduler...
   tusb_init();
