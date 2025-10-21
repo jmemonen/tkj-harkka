@@ -79,6 +79,7 @@ add_subdirectory(libs/TKJHAT)
 add_subdirectory(libs/usb-serial-debug)
 # If created new libraries, include them here. 
 # You can EDIT it if you add new libraries
+add_subdirectory(libs/sensors)
 # ===============================================================================================
 
 # DO NOT EDIT: Prepare build to compile the different examples ==================================
@@ -122,6 +123,7 @@ target_link_libraries(${MAIN_TARGET}
         FreeRTOS-Kernel-Heap4
         TKJHAT_SDK
         usb_serial_debug
+        sensors
 )
 
 # Include libraries necessaries to control the WiFi. If you are using the internal pico LED in W model, it is also 

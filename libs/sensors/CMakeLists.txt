@@ -1,0 +1,21 @@
+# sensors
+
+set (APP_NAME sensors)
+
+add_library(${APP_NAME} STATIC
+  src/sensors.c
+)
+
+target_include_directories(${APP_NAME}
+  PUBLIC
+  ${CMAKE_CURRENT_SOURCE_DIR}/include
+  PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
+
+target_link_libraries(${APP_NAME}
+  PUBLIC
+  TKJHAT_SDK
+)
+
+target_compile_features(${APP_NAME} PUBLIC c_std_11)

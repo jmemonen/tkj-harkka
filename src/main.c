@@ -13,6 +13,7 @@
 #include "portmacro.h"
 #include "tkjhat/sdk.h"
 #include "usbSerialDebug/helper.h"
+#include "sensors/sensors.h"
 
 // Default stack size for the tasks. It can be reduced to 1024 if task is not
 // using lot of memory.
@@ -32,7 +33,10 @@ static void usbTask(void *arg) {
 static void sensorTask(void *arg) {
   (void)arg;
   while (1) {
-    usb_serial_print("@sensorTask\n");
+    int sensorReading = hello_sensors();
+    char s[6];
+    snprintf(s, 6, "%d\n", sensorReading);
+    usb_serial_print("@sensorTask: %d\n");
     vTaskDelay(pdMS_TO_TICKS(1000));
   }
 }
