@@ -11,3 +11,5 @@ typedef struct {
 } motion_data_t;
 
 int hello_sensors(void);
+
+void read_motion_data(motion_data_t *data);
