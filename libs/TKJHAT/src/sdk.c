@@ -808,7 +808,7 @@ int init_ICM42670() {
     // blink_led(5);
     
     //Soft reset
-    icm_soft_reset();
+    // icm_soft_reset();
 
     //DETECT ADDRESS FOR AD0 floating pin: 
     int address = ICM42670_autodetect_address();
@@ -876,9 +876,9 @@ int ICM42670_startAccel(uint16_t odr_hz, uint16_t fsr_g) {
 
     // Combine into ACCEL_CONFIG0: [7:5] = fsr, [3:0] = odr
     uint8_t accel_config0_val = (fsr_bits << 5) | (odr_bits & 0x0F);
-    set_red_led_status(1);
+    // set_red_led_status(1);
     int rc = icm_i2c_write_byte(ICM42670_ACCEL_CONFIG0_REG, accel_config0_val);
-    set_red_led_status(0);
+    // set_red_led_status(0);
     sleep_us(200); 
     if (rc != 0) return -3;
     return 0; // success
