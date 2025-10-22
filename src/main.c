@@ -12,101 +12,54 @@
 #include "projdefs.h"
 #include "sensors/sensors.h"
 #include "tkjhat/sdk.h"
-#include "usbSerialDebug/helper.h"
+// #include "usbSerialDebug/helper.h"
 
 // Default stack size for the tasks. It can be reduced to 1024 if task is not
 // using lot of memory.
 #define DEFAULT_STACK_SIZE 2048
-#define CDC_ITF_TX 1
-#define MOTION_BUF_SIZE 128
+// #define CDC_ITF_TX 1
+// #define MOTION_BUF_SIZE 128
 
 static motion_data_t motion_data;
 
-// Activates the TinyUSB library.
-static void usbTask(void *arg) {
+static void imu_task(void *arg) {
   (void)arg;
-  while (1) {
-    tud_task(); // With FreeRTOS wait for events
-                // Do not add vTaskDelay.
-  }
-}
-
-// Reads the sensors.
-static void sensorTask(void *arg) {
-  (void)arg;
-  char buf[MOTION_BUF_SIZE];
-
-  // ICM42670_startAccel(ICM42670_ACCEL_ODR_DEFAULT,
-  // ICM42670_ACCEL_FSR_DEFAULT); ICM42670_startGyro(ICM42670_GYRO_ODR_DEFAULT,
-  // ICM42670_GYRO_FSR_DEFAULT);
-
-  while (!tud_mounted() || !tud_cdc_n_connected(1)) {
-    vTaskDelay(pdMS_TO_TICKS(50));
-  }
-
-  if (usb_serial_connected()) {
-    usb_serial_print("sensorTask started...");
-  }
-
-  sleep_ms(1000);
-  usb_serial_print("@sensorTask");
-
-  usb_serial_flush();
-
-  set_red_led_status(1);
+  
+  printf("Initializing ICM-42670P...\n");
+  //Initialize IMU
   if (init_ICM42670() == 0) {
-    usb_serial_print("ICM-42670P initialized successfully!\n");
-
-    int _gyro = ICM42670_startGyro(ICM42670_GYRO_ODR_DEFAULT,
-                                   ICM42670_GYRO_FSR_DEFAULT);
-    snprintf(buf, MOTION_BUF_SIZE, "Gyro return: %d\n", _gyro);
-    usb_serial_print(buf);
-    usb_serial_flush();
-
-    int _accel = ICM42670_startAccel(ICM42670_ACCEL_ODR_DEFAULT,
-                                     ICM42670_ACCEL_FSR_DEFAULT);
-    snprintf(buf, MOTION_BUF_SIZE, "Accel return: %d\n", _accel);
-    usb_serial_print(buf);
-    usb_serial_flush();
-
-    int _enablegyro = ICM42670_enable_accel_gyro_ln_mode();
-    snprintf(buf, MOTION_BUF_SIZE, "Enable gyro: %d\n", _enablegyro);
-    usb_serial_print(buf);
-    usb_serial_flush();
-    set_red_led_status(0);
-  } else {
-    usb_serial_print("Failed to initialize ICM-42670P.\n");
-    set_red_led_status(0);
-  }
-
-  motion_data.error = 0;
-
-  while (1) {
-    // usb_serial_print("Hello from sensor task!");
-    // usb_serial_flush();
-    // int sensorReading = hello_sensors();
-    // char s[6];
-    // snprintf(s, 6, "%d\n", sensorReading);
-    // usb_serial_print(s);
-    read_motion_data(&motion_data);
-    if (motion_data.error) {
-      usb_serial_print("There was an error reading motion data!");
-    } else {
-      usb_serial_print("No errors detected reading motion data.");
+    printf("ICM-42670P initialized successfully!\n");
+    printf("Starting accelometer and gyroscope with default values...\n");
+    ICM42670_start_with_default_values();
+    /*
+    if (ICM42670_startAccel(ICM42670_ACCEL_ODR_DEFAULT, ICM42670_ACCEL_FSR_DEFAULT) != 0){
+      printf("Wrong values to init the accelerometer in ICM-42670P.\n");
     }
-    usb_serial_flush();
-    format_motion_csv(&motion_data, buf, MOTION_BUF_SIZE);
-    usb_serial_print(buf);
-    usb_serial_flush();
+    if (ICM42670_startGyro(ICM42670_GYRO_ODR_DEFAULT, ICM42670_GYRO_FSR_DEFAULT) != 0){
+      printf("Wrong values to init the gyroscope in ICM-42670P.\n");
+    };
+    ICM42670_enable_accel_gyro_ln_mode();
+    */
 
+  } else {
+      printf("Failed to initialize ICM-42670P.\n");
+  }
+  float ax, ay, az, gx, gy, gz, t;
+
+  while(1) {
+    ICM42670_read_sensor_data(&ax, &ay, &az, &gx, &gy, &gz, &t);
+
+    printf("Accel: X=%.2f Y=%.2f Z=%.2f | Gyro: X=%.2f Y=%.2f Z=%.2f | Temp: %.2f C\n", ax, ay, az, gx, gy, gz, t);
     vTaskDelay(pdMS_TO_TICKS(1000));
   }
+
 }
 
 // Add here necessary states
 enum state { IDLE = 1 };
 enum state programState = IDLE;
 
+/*
 static void example_task(void *arg) {
   (void)arg;
 
@@ -118,54 +71,42 @@ static void example_task(void *arg) {
     // usb_serial_print("Hello example task!");
     vTaskDelay(pdMS_TO_TICKS(2000));
   }
-}
+} */
 
 int main() {
-  // stdio_init_all();
+  stdio_init_all();
   // Uncomment this lines if you want to wait till the serial monitor is
   // connected
-  /*while (!stdio_usb_connected()){
+  while (!stdio_usb_connected()){
       sleep_ms(10);
-  }*/
+  }
+
   init_hat_sdk();
   sleep_ms(1000); // Wait some time so initialization of USB and hat is done.
   init_i2c_default();
   sleep_ms(1000); // Wait some time so initialization of USB and hat is done.
-  init_red_led();
 
-  // init_ICM42670(); // TODO: check return value for errors...
-  // ICM42670_start_with_default_values();
-
-  TaskHandle_t myExampleTask, hUSB, sensor = NULL;
-
-  xTaskCreate(usbTask, "usb", 2048, NULL, 3, &hUSB);
-#if (configNUMBER_OF_CORES > 1)
-  vTaskCoreAffinitySet(hUSB, 1u << 0);
-#endif
+  TaskHandle_t imuTaskHandle = NULL;
 
   // Create the tasks with xTaskCreate
   BaseType_t result = xTaskCreate(
-      example_task,       // (en) Task function
-      "example",          // (en) Name of the task
+      imu_task,           // (en) Task function
+      "imu",              // (en) Name of the task
       DEFAULT_STACK_SIZE, // (en) Size of the stack for this task (in words).
                           // Generally 1024 or 2048
       NULL,               // (en) Arguments of the task
       2,                  // (en) Priority of this task
-      &myExampleTask);    // (en) A handle to control the execution of this task
+      &imuTaskHandle);    // (en) A handle to control the execution of this task
 
   if (result != pdPASS) {
-    usb_serial_print("Example Task creation failed\n");
+    printf("IMU Task creation failed\n");
     return 0;
   }
 
-  result =
-      xTaskCreate(sensorTask, "sensor", DEFAULT_STACK_SIZE, NULL, 2, &sensor);
-
-  // Apparently these should be right before the scheduler...
-  tusb_init();
-  usb_serial_init();
   // Start the scheduler (never returns)
   vTaskStartScheduler();
+
+
 
   // Never reach this line.
   return 0;
