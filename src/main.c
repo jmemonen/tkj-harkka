@@ -41,49 +41,33 @@ static void sensorTask(void *arg) {
   }
 
   if (usb_serial_connected()) {
-    usb_serial_print("sensorTask started...");
+    usb_serial_print("sensorTask started...\r\n");
     usb_serial_flush();
   }
 
   if (init_ICM42670() == 0) {
-    usb_serial_print("ICM-42670P initialized successfully!\n");
-    ICM42670_start_with_default_values();
-    // int _gyro = ICM42670_startGyro(ICM42670_GYRO_ODR_DEFAULT,
-    //                                ICM42670_GYRO_FSR_DEFAULT);
-    // snprintf(buf, MOTION_BUF_SIZE, "Gyro return: %d\n", _gyro);
-    // usb_serial_print(buf);
-    // usb_serial_flush();
-    //
-    // int _accel = ICM42670_startAccel(ICM42670_ACCEL_ODR_DEFAULT,
-    //                                  ICM42670_ACCEL_FSR_DEFAULT);
-    // snprintf(buf, MOTION_BUF_SIZE, "Accel return: %d\n", _accel);
-    // usb_serial_print(buf);
-    // usb_serial_flush();
-    //
-    // int _enablegyro = ICM42670_enable_accel_gyro_ln_mode();
-    // snprintf(buf, MOTION_BUF_SIZE, "Enable gyro: %d\n", _enablegyro);
-    // usb_serial_print(buf);
-    // usb_serial_flush();
-    // set_red_led_status(0);
+    usb_serial_print("ICM-42670P initialized successfully!\r\n");
+    ICM42670_start_with_default_values(); // TODO: Handle error values?
   } else {
-    usb_serial_print("Failed to initialize ICM-42670P.\n");
-    set_red_led_status(0);
+    usb_serial_print("Failed to initialize ICM-42670P.\r\n");
   }
 
   motion_data.error = 0;
+  usb_serial_print(IMU_FIELD_NAMES);
 
   while (1) {
     read_motion_data(&motion_data);
     if (motion_data.error) {
-      usb_serial_print("There was an error reading motion data!");
+      usb_serial_print("There was an error reading motion data!\r\n");
       usb_serial_flush();
+      motion_data.error = 0;
       continue;
     }
     format_motion_csv(&motion_data, buf, MOTION_BUF_SIZE);
     usb_serial_print(buf);
     usb_serial_flush();
 
-    vTaskDelay(pdMS_TO_TICKS(1000));
+    vTaskDelay(pdMS_TO_TICKS(10));
   }
 }
 

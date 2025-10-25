@@ -14,6 +14,8 @@ typedef struct {
   uint8_t error;
 } motion_data_t;
 
+extern const char IMU_FIELD_NAMES[];
+
 int hello_sensors(void);
 
 // A wrapper for ICM42670_read_sensor_data. Reads sensor values into a struct.

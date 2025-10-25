@@ -4,6 +4,10 @@
 #include <stdint.h>
 #include <stdio.h>
 
+// Field names for printing out in csv-form.
+const char IMU_FIELD_NAMES[] =
+    "accel_x,accel_y,accel_z,gyro_x,gyro_y,gyro_z,tmp\r\n";
+
 int hello_sensors(void) { return 666; }
 
 void read_motion_data(motion_data_t *data) {
@@ -11,8 +15,9 @@ void read_motion_data(motion_data_t *data) {
     return; // TODO: an error code?
   }
   // TODO: Check the return code for errors.
-  uint8_t error = ICM42670_read_sensor_data(&(data->ax), &(data->ay), &(data->az), &(data->gx),
-                            &(data->gy), &(data->gz), &(data->t));
+  uint8_t error = ICM42670_read_sensor_data(
+      &(data->ax), &(data->ay), &(data->az), &(data->gx), &(data->gy),
+      &(data->gz), &(data->t));
 
   data->error = error;
 }
