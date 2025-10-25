@@ -32,7 +32,7 @@ void format_motion_csv(const motion_data_t *data, char *buf, size_t buf_size) {
 
 // Calculates the exponential moving average of two floats
 float exp_moving_avg(float current, float next, float alpha) {
-  return (next - current) * alpha - current;
+  return (next - current) * alpha + current;
 }
 
 static motion_data_t _imu_data_filter;
