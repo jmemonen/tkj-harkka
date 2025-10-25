@@ -1,6 +1,4 @@
-
-#include <pico/types.h>
-#include <stdio.h>
+#include <pico/time.h>
 #include <string.h>
 
 #include <pico/stdlib.h>
@@ -11,14 +9,18 @@
 #include <tusb.h>
 
 #include "portmacro.h"
+#include "projdefs.h"
+#include "sensors/sensors.h"
 #include "tkjhat/sdk.h"
 #include "usbSerialDebug/helper.h"
-#include "sensors/sensors.h"
 
 // Default stack size for the tasks. It can be reduced to 1024 if task is not
 // using lot of memory.
 #define DEFAULT_STACK_SIZE 2048
 #define CDC_ITF_TX 1
+#define MOTION_BUF_SIZE 128
+
+static motion_data_t motion_data;
 
 // Activates the TinyUSB library.
 static void usbTask(void *arg) {
@@ -32,12 +34,40 @@ static void usbTask(void *arg) {
 // Reads the sensors.
 static void sensorTask(void *arg) {
   (void)arg;
+  char buf[MOTION_BUF_SIZE];
+
+  while (!tud_mounted() || !tud_cdc_n_connected(1)) {
+    vTaskDelay(pdMS_TO_TICKS(50));
+  }
+
+  if (usb_serial_connected()) {
+    usb_serial_print("sensorTask started...\r\n");
+    usb_serial_flush();
+  }
+
+  if (init_ICM42670() == 0) {
+    usb_serial_print("ICM-42670P initialized successfully!\r\n");
+    ICM42670_start_with_default_values(); // TODO: Handle error values?
+  } else {
+    usb_serial_print("Failed to initialize ICM-42670P.\r\n");
+  }
+
+  motion_data.error = 0;
+  usb_serial_print(IMU_FIELD_NAMES);
+
   while (1) {
-    int sensorReading = hello_sensors();
-    char s[6];
-    snprintf(s, 6, "%d\n", sensorReading);
-    usb_serial_print(s);
-    vTaskDelay(pdMS_TO_TICKS(1000));
+    read_motion_data(&motion_data);
+    if (motion_data.error) {
+      usb_serial_print("There was an error reading motion data!\r\n");
+      usb_serial_flush();
+      motion_data.error = 0;
+      continue;
+    }
+    format_motion_csv(&motion_data, buf, MOTION_BUF_SIZE);
+    usb_serial_print(buf);
+    usb_serial_flush();
+
+    vTaskDelay(pdMS_TO_TICKS(10));
   }
 }
 
@@ -49,10 +79,11 @@ static void example_task(void *arg) {
   (void)arg;
 
   for (;;) {
-    tight_loop_contents(); // Modify with application code here.
-    usb_serial_print("TESTI");
-    tud_cdc_n_write(CDC_ITF_TX, (uint_fast8_t const *)"TESTI\n", 7);
-    tud_cdc_n_write_flush(CDC_ITF_TX);
+    // tight_loop_contents(); // Modify with application code here.
+    // usb_serial_print("TESTI");
+    // tud_cdc_n_write(CDC_ITF_TX, (uint_fast8_t const *)"TESTI\n", 7);
+    // tud_cdc_n_write_flush(CDC_ITF_TX);
+    // usb_serial_print("Hello example task!");
     vTaskDelay(pdMS_TO_TICKS(2000));
   }
 }
@@ -65,7 +96,13 @@ int main() {
       sleep_ms(10);
   }*/
   init_hat_sdk();
-  sleep_ms(300); // Wait some time so initialization of USB and hat is done.
+  sleep_ms(1000); // Wait some time so initialization of USB and hat is done.
+  init_i2c_default();
+  sleep_ms(1000); // Wait some time so initialization of USB and hat is done.
+  init_red_led();
+
+  // init_ICM42670(); // TODO: check return value for errors...
+  // ICM42670_start_with_default_values();
 
   TaskHandle_t myExampleTask, hUSB, sensor = NULL;
 
@@ -89,11 +126,12 @@ int main() {
     return 0;
   }
 
-  result = xTaskCreate(sensorTask, "sensor", DEFAULT_STACK_SIZE, NULL, 2, &sensor);
+  result =
+      xTaskCreate(sensorTask, "sensor", DEFAULT_STACK_SIZE, NULL, 2, &sensor);
 
+  // These have to be right before the scheduler.
   tusb_init();
   usb_serial_init();
-
   // Start the scheduler (never returns)
   vTaskStartScheduler();
 
