@@ -1,0 +1,26 @@
+@startuml
+left to right direction
+hide empty description
+skinparam dpi 300
+
+state "Initializing" as InitState
+state "Writing" as WriteState
+state "Sending" as TxState
+state "Receiving" as RxState
+
+
+[*] --> InitState
+InitState --> WriteState: Initialization ready
+InitState : Initializes the hardware
+
+WriteState : Input characters with gestures and buttons
+
+TxState : Sends and clears outgoing message.
+WriteState --> TxState : Msg ready
+TxState --> WriteState : Msg sent
+
+RxState : Receives and displays incoming message.
+WriteState --> RxState : Interrupted by incoming msg
+RxState --> WriteState : Msg received
+
+@enduml
