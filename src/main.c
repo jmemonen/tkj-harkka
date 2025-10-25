@@ -20,10 +20,12 @@
 #define DEFAULT_STACK_SIZE 2048
 #define CDC_ITF_TX 1
 #define MOTION_BUF_SIZE 128
+#define POSITION_BUF_SIZE 128
 #define EXP_MOV_AVG_ALPHA 0.25
 
 static motion_data_t motion_data;
 static uint8_t position_state = DASH_STATE;
+static float d_pos = 0.0f;
 
 // Activates the TinyUSB library.
 static void usbTask(void *arg) {
@@ -78,6 +80,7 @@ static void sensorTask(void *arg) {
 
 static void position_task(void *arg) {
   (void)arg;
+  char buf[POSITION_BUF_SIZE];
 
   while (!tud_mounted() || !tud_cdc_n_connected(1)) {
     vTaskDelay(pdMS_TO_TICKS(50));
@@ -89,21 +92,27 @@ static void position_task(void *arg) {
   }
 
   for (;;) {
+    update_da(&motion_data);
+    snprintf(buf, POSITION_BUF_SIZE,
+             "total_accel: %03.3f | delta_a: %03.3f\r\n", motion_data.a_total,
+             motion_data.da);
+    usb_serial_print(buf);
     uint8_t new_position = get_position(&motion_data);
     if (new_position != position_state) {
       position_state = new_position;
       switch (position_state) {
       case DOT_STATE:
-        usb_serial_print("New state: DOT\r\n");
+        // usb_serial_print("New state: DOT\r\n");
         break;
       case DASH_STATE:
-        usb_serial_print("New state: DASH\r\n");
+        // usb_serial_print("New state: DASH\r\n");
         break;
       case WHITESPACE_STATE:
-        usb_serial_print("New state: WHITESPACE\r\n");
+        // usb_serial_print("New state: WHITESPACE\r\n");
+        break;
       }
-      usb_serial_flush();
     }
+    usb_serial_flush();
 
     vTaskDelay(pdMS_TO_TICKS(100));
   }

@@ -15,6 +15,8 @@ typedef struct {
   float gz;
   float t;
   uint8_t error;
+  float a_total;
+  float da;
 } motion_data_t;
 
 extern const char IMU_FIELD_NAMES[];
@@ -40,3 +42,6 @@ float exp_moving_avg(float current, float next, float alpha);
 // 1 : Sideways position (dash)
 // 2 : Upwards position (whitespace)
 uint8_t get_position(const motion_data_t *data);
+
+// Updates the change of acceleration field in the motion_data_t.
+void update_da(motion_data_t *data);

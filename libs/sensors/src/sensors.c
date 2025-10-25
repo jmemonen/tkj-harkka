@@ -4,6 +4,8 @@
 #include <stdint.h>
 #include <stdio.h>
 
+float get_total_accel(const motion_data_t *data);
+
 // Field names for printing out in csv-form.
 const char IMU_FIELD_NAMES[] =
     "accel_x,accel_y,accel_z,gyro_x,gyro_y,gyro_z,tmp\r\n";
@@ -14,11 +16,9 @@ void read_motion_data(motion_data_t *data) {
   if (data == NULL) {
     return; // TODO: an error code?
   }
-  // TODO: Check the return code for errors.
   uint8_t error = ICM42670_read_sensor_data(
       &(data->ax), &(data->ay), &(data->az), &(data->gx), &(data->gy),
       &(data->gz), &(data->t));
-
   data->error = error;
 }
 
@@ -49,11 +49,20 @@ void read_filtered_motion_data(motion_data_t *data, float alpha) {
   data->gy = exp_moving_avg(data->gy, _imu_data_filter.gy, alpha);
   data->gz = exp_moving_avg(data->gz, _imu_data_filter.gz, alpha);
   data->t = exp_moving_avg(data->t, _imu_data_filter.t, alpha);
+  data->error = _imu_data_filter.error;
+}
+
+float get_total_accel(const motion_data_t *data) {
+  float result = data->ax;
+  result += data->ay;
+  result += data->az;
+  return result;
 }
 
 uint8_t get_position(const motion_data_t *data) {
   // TODO: Away with magic numbers and such.
-  // TODO: Works pretty well for something so simple. Could be smoother, though...
+  // TODO: Works pretty well for something so simple. Could be smoother,
+  // though...
   if (data->ay < -0.7) {
     return WHITESPACE_STATE;
   }
@@ -61,4 +70,12 @@ uint8_t get_position(const motion_data_t *data) {
     return DASH_STATE;
   }
   return DOT_STATE;
+}
+
+static inline float float_abs(float x) { return (x < 0) ? -x : x; }
+
+void update_da(motion_data_t *data) {
+  float new_a_total = get_total_accel(data);
+  data->da = new_a_total - data->a_total;
+  data->a_total = new_a_total;
 }
