@@ -19,6 +19,7 @@
 #define DEFAULT_STACK_SIZE 2048
 #define CDC_ITF_TX 1
 #define MOTION_BUF_SIZE 128
+#define EXP_MOV_AVG_ALPHA 0.25
 
 static motion_data_t motion_data;
 
@@ -56,7 +57,7 @@ static void sensorTask(void *arg) {
   usb_serial_print(IMU_FIELD_NAMES);
 
   while (1) {
-    read_motion_data(&motion_data);
+    read_filtered_motion_data(&motion_data, EXP_MOV_AVG_ALPHA);
     if (motion_data.error) {
       usb_serial_print("There was an error reading motion data!\r\n");
       usb_serial_flush();
