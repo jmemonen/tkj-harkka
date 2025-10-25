@@ -46,4 +46,5 @@ uint8_t get_position(const motion_data_t *data);
 
 // Updates the change of acceleration field in the motion_data_t.
 // TODO: Doesn't quite detect rotating to the left...
+// TODO: Use gyro data too.
 void update_da(motion_data_t *data);
