@@ -4,7 +4,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-enum position { DOT_STATE, DASH_STATE, WHITESPACE_STATE };
+enum position { MOVING, DOT_STATE, DASH_STATE, WHITESPACE_STATE };
 
 typedef struct {
   float ax;
@@ -38,10 +38,12 @@ float exp_moving_avg(float current, float next, float alpha);
 
 // Calculates the current position state of the device.
 // Returns
-// 0 : Neutral position (dot)
-// 1 : Sideways position (dash)
-// 2 : Upwards position (whitespace)
+// 0 : Device is moving
+// 1 : Neutral position (dot)
+// 2 : Sideways position (dash)
+// 3 : Upwards position (whitespace)
 uint8_t get_position(const motion_data_t *data);
 
 // Updates the change of acceleration field in the motion_data_t.
+// TODO: Doesn't quite detect rotating to the left...
 void update_da(motion_data_t *data);

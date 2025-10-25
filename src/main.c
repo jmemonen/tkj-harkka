@@ -93,22 +93,25 @@ static void position_task(void *arg) {
 
   for (;;) {
     update_da(&motion_data);
-    snprintf(buf, POSITION_BUF_SIZE,
-             "total_accel: %03.3f | delta_a: %03.3f\r\n", motion_data.a_total,
-             motion_data.da);
-    usb_serial_print(buf);
+    // snprintf(buf, POSITION_BUF_SIZE,
+    //          "total_accel: %03.3f | delta_a: %03.3f\r\n", motion_data.a_total,
+    //          motion_data.da);
+    // usb_serial_print(buf);
     uint8_t new_position = get_position(&motion_data);
     if (new_position != position_state) {
       position_state = new_position;
       switch (position_state) {
+      case MOVING:
+        usb_serial_print("State: MOVING\r\n");
+        break;
       case DOT_STATE:
-        // usb_serial_print("New state: DOT\r\n");
+        usb_serial_print("State: DOT\r\n");
         break;
       case DASH_STATE:
-        // usb_serial_print("New state: DASH\r\n");
+        usb_serial_print("State: DASH\r\n");
         break;
       case WHITESPACE_STATE:
-        // usb_serial_print("New state: WHITESPACE\r\n");
+        usb_serial_print("State: WHITESPACE\r\n");
         break;
       }
     }

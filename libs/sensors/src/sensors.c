@@ -63,6 +63,9 @@ uint8_t get_position(const motion_data_t *data) {
   // TODO: Away with magic numbers and such.
   // TODO: Works pretty well for something so simple. Could be smoother,
   // though...
+  if (data->da > 0.1) {
+    return MOVING;
+  }
   if (data->ay < -0.7) {
     return WHITESPACE_STATE;
   }
@@ -77,5 +80,5 @@ static inline float float_abs(float x) { return (x < 0) ? -x : x; }
 void update_da(motion_data_t *data) {
   float new_a_total = get_total_accel(data);
   data->da = new_a_total - data->a_total;
-  data->a_total = new_a_total;
+  data->a_total = exp_moving_avg(data->a_total, new_a_total, 0.25);
 }
