@@ -161,7 +161,7 @@ int main() {
   result =
       xTaskCreate(sensorTask, "sensor", DEFAULT_STACK_SIZE, NULL, 2, &sensor);
 
-  // Apparently these should be right before the scheduler...
+  // These have to be right before the scheduler.
   tusb_init();
   usb_serial_init();
   // Start the scheduler (never returns)
