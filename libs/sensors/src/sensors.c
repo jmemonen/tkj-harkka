@@ -21,6 +21,6 @@ void format_motion_csv(const motion_data_t *data, char *buf, size_t buf_size) {
   if (data == NULL || buf == NULL || buf_size < 1) {
     return; // TODO: an error code?
   }
-  snprintf(buf, buf_size, "%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f\n", data->ax,
+  snprintf(buf, buf_size, "%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f\r\n", data->ax,
            data->ay, data->az, data->gx, data->gy, data->gz, data->t);
 }
