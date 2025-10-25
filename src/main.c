@@ -1,4 +1,5 @@
 #include <pico/time.h>
+#include <stdint.h>
 #include <string.h>
 
 #include <pico/stdlib.h>
@@ -22,6 +23,7 @@
 #define EXP_MOV_AVG_ALPHA 0.25
 
 static motion_data_t motion_data;
+static uint8_t position_state = DASH_STATE;
 
 // Activates the TinyUSB library.
 static void usbTask(void *arg) {
@@ -64,28 +66,46 @@ static void sensorTask(void *arg) {
       motion_data.error = 0;
       continue;
     }
-    format_motion_csv(&motion_data, buf, MOTION_BUF_SIZE);
-    usb_serial_print(buf);
-    usb_serial_flush();
+
+    // Prints for dev and debug
+    // format_motion_csv(&motion_data, buf, MOTION_BUF_SIZE);
+    // usb_serial_print(buf);
+    // usb_serial_flush();
 
     vTaskDelay(pdMS_TO_TICKS(10));
   }
 }
 
-// Add here necessary states
-enum state { IDLE = 1 };
-enum state programState = IDLE;
-
-static void example_task(void *arg) {
+static void position_task(void *arg) {
   (void)arg;
 
+  while (!tud_mounted() || !tud_cdc_n_connected(1)) {
+    vTaskDelay(pdMS_TO_TICKS(50));
+  }
+
+  if (usb_serial_connected()) {
+    usb_serial_print("position_task started...\r\n");
+    usb_serial_flush();
+  }
+
   for (;;) {
-    // tight_loop_contents(); // Modify with application code here.
-    // usb_serial_print("TESTI");
-    // tud_cdc_n_write(CDC_ITF_TX, (uint_fast8_t const *)"TESTI\n", 7);
-    // tud_cdc_n_write_flush(CDC_ITF_TX);
-    // usb_serial_print("Hello example task!");
-    vTaskDelay(pdMS_TO_TICKS(2000));
+    uint8_t new_position = get_position(&motion_data);
+    if (new_position != position_state) {
+      position_state = new_position;
+      switch (position_state) {
+      case DOT_STATE:
+        usb_serial_print("New state: DOT\r\n");
+        break;
+      case DASH_STATE:
+        usb_serial_print("New state: DASH\r\n");
+        break;
+      case WHITESPACE_STATE:
+        usb_serial_print("New state: WHITESPACE\r\n");
+      }
+      usb_serial_flush();
+    }
+
+    vTaskDelay(pdMS_TO_TICKS(100));
   }
 }
 
@@ -105,7 +125,7 @@ int main() {
   // init_ICM42670(); // TODO: check return value for errors...
   // ICM42670_start_with_default_values();
 
-  TaskHandle_t myExampleTask, hUSB, sensor = NULL;
+  TaskHandle_t positionTask, hUSB, sensor = NULL;
 
   xTaskCreate(usbTask, "usb", 2048, NULL, 3, &hUSB);
 #if (configNUMBER_OF_CORES > 1)
@@ -114,13 +134,13 @@ int main() {
 
   // Create the tasks with xTaskCreate
   BaseType_t result = xTaskCreate(
-      example_task,       // (en) Task function
-      "example",          // (en) Name of the task
+      position_task,      // (en) Task function
+      "position",         // (en) Name of the task
       DEFAULT_STACK_SIZE, // (en) Size of the stack for this task (in words).
                           // Generally 1024 or 2048
       NULL,               // (en) Arguments of the task
-      2,                  // (en) Priority of this task
-      &myExampleTask);    // (en) A handle to control the execution of this task
+      1,                  // (en) Priority of this task
+      &positionTask);     // (en) A handle to control the execution of this task
 
   if (result != pdPASS) {
     usb_serial_print("Example Task creation failed\n");

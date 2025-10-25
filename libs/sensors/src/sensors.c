@@ -48,5 +48,17 @@ void read_filtered_motion_data(motion_data_t *data, float alpha) {
   data->gx = exp_moving_avg(data->gx, _imu_data_filter.gx, alpha);
   data->gy = exp_moving_avg(data->gy, _imu_data_filter.gy, alpha);
   data->gz = exp_moving_avg(data->gz, _imu_data_filter.gz, alpha);
-  data->t  = exp_moving_avg(data->t,  _imu_data_filter.t,  alpha);
+  data->t = exp_moving_avg(data->t, _imu_data_filter.t, alpha);
+}
+
+uint8_t get_position(const motion_data_t *data) {
+  // TODO: Away with magic numbers and such.
+  // TODO: Works pretty well for something so simple. Could be smoother, though...
+  if (data->ay < -0.7) {
+    return WHITESPACE_STATE;
+  }
+  if (data->ax < -0.7) {
+    return DASH_STATE;
+  }
+  return DOT_STATE;
 }
