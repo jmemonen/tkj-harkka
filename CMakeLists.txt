@@ -80,6 +80,7 @@ add_subdirectory(libs/usb-serial-debug)
 # If created new libraries, include them here. 
 # You can EDIT it if you add new libraries
 add_subdirectory(libs/sensors)
+add_subdirectory(libs/morso)
 # ===============================================================================================
 
 # DO NOT EDIT: Prepare build to compile the different examples ==================================
@@ -126,6 +127,7 @@ target_link_libraries(${MAIN_TARGET}
         TKJHAT_SDK
         usb_serial_debug
         sensors
+        morso
 )
 
 # Include libraries necessaries to control the WiFi. If you are using the internal pico LED in W model, it is also 
