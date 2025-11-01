@@ -5,6 +5,7 @@
 #include <stdint.h>
 
 enum position { DOT_STATE, DASH_STATE, WHITESPACE_STATE };
+enum motion { WAITING, MOVING, COOLDOWN };
 
 typedef struct {
   float ax;
@@ -40,3 +41,6 @@ float exp_moving_avg(float current, float next, float alpha);
 // 1 : Sideways position (dash)
 // 2 : Upwards position (whitespace)
 uint8_t get_position(const motion_data_t *data);
+
+// Detect flicking motion
+void detect_flicking(motion_data_t *data);

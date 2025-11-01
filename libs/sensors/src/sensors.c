@@ -62,3 +62,6 @@ uint8_t get_position(const motion_data_t *data) {
   }
   return DOT_STATE;
 }
+
+// Detect flicking motion
+//void detect_flicking(const motion_data_t *data) {}

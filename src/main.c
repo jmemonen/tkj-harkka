@@ -24,6 +24,7 @@
 
 static motion_data_t motion_data;
 static uint8_t position_state = DASH_STATE;
+static uint8_t motion_state = WAITING;
 
 // Activates the TinyUSB library.
 static void usbTask(void *arg) {
@@ -35,7 +36,7 @@ static void usbTask(void *arg) {
 }
 
 // Reads the sensors.
-static void sensorTask(void *arg) {
+static void sensor_task(void *arg) {
   (void)arg;
   char buf[MOTION_BUF_SIZE];
 
@@ -94,18 +95,72 @@ static void position_task(void *arg) {
       position_state = new_position;
       switch (position_state) {
       case DOT_STATE:
-        usb_serial_print("New state: DOT\r\n");
+        // usb_serial_print("New state: DOT\r\n");
         break;
       case DASH_STATE:
-        usb_serial_print("New state: DASH\r\n");
+        // usb_serial_print("New state: DASH\r\n");
         break;
       case WHITESPACE_STATE:
-        usb_serial_print("New state: WHITESPACE\r\n");
+        // usb_serial_print("New state: WHITESPACE\r\n");
       }
       usb_serial_flush();
     }
 
     vTaskDelay(pdMS_TO_TICKS(100));
+  }
+}
+
+static void motion_task(void *arg) {
+  (void)arg;
+
+  TickType_t last_event_tick = 0;
+
+  while(1) {
+    TickType_t current_tick = xTaskGetTickCount();
+    TickType_t time_difference = (current_tick - last_event_tick) * portTICK_PERIOD_MS;
+
+    switch (motion_state) {
+      case WAITING:
+        if (motion_data.ax < -0.8) {
+          usb_serial_print("Flicked left\r\n");
+          motion_state = MOVING;
+          usb_serial_print("Motion state: MOVING\r\n");
+          last_event_tick = current_tick;
+        } 
+        else if (motion_data.ax > 0.8) {
+          usb_serial_print("Flicked right\r\n");
+          motion_state = MOVING;
+          usb_serial_print("Motion state: MOVING\r\n");
+          last_event_tick = current_tick;
+        }
+        break;
+      case MOVING:
+        if (motion_data.ax > -0.2 && motion_data.ax < 0.2) {
+          motion_state = COOLDOWN;
+          usb_serial_print("Motion state: COOLDOWN\r\n");
+          last_event_tick = current_tick;
+        }
+        break;
+      case COOLDOWN:
+        if (time_difference > 200) {
+          motion_state = WAITING;
+          usb_serial_print("Motion state: WAITING\r\n");
+        }
+        break;
+    }
+
+    /*
+    if (time_difference > 100) {
+      if (motion_data.ax < -0.7) {
+        usb_serial_print("Flicked left\r\n");
+        last_event_tick = current_tick;
+      } else if (motion_data.ax > 0.7) {
+        usb_serial_print("Flicked right\r\n");
+        last_event_tick = current_tick;
+      }
+    } */
+
+    vTaskDelay(pdMS_TO_TICKS(50));
   }
 }
 
@@ -125,7 +180,7 @@ int main() {
   // init_ICM42670(); // TODO: check return value for errors...
   // ICM42670_start_with_default_values();
 
-  TaskHandle_t positionTask, hUSB, sensor = NULL;
+  TaskHandle_t positionTask, motionTask, hUSB, sensorTask = NULL;
 
   xTaskCreate(usbTask, "usb", 2048, NULL, 3, &hUSB);
 #if (configNUMBER_OF_CORES > 1)
@@ -148,7 +203,10 @@ int main() {
   }
 
   result =
-      xTaskCreate(sensorTask, "sensor", DEFAULT_STACK_SIZE, NULL, 2, &sensor);
+      xTaskCreate(sensor_task, "sensor", DEFAULT_STACK_SIZE, NULL, 2, &sensorTask);
+
+  result =
+      xTaskCreate(motion_task, "motion", DEFAULT_STACK_SIZE, NULL, 2, &motionTask);
 
   // These have to be right before the scheduler.
   tusb_init();
