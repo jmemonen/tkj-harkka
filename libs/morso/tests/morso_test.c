@@ -3,9 +3,11 @@
 #include <stdio.h>
 
 void test_char_to_morse(void);
+void test_morse_to_char(void);
 
-int main(void) { 
+int main(void) {
   test_char_to_morse();
+  test_morse_to_char();
   return 0;
 }
 
@@ -35,5 +37,14 @@ void test_char_to_morse(void) {
     }
     printf("%d : %s\n", *c_ptr, str);
     ++c_ptr;
+  }
+}
+
+void test_morse_to_char() {
+  printf("\ntest_morse_to_char\n");
+  for (char c = 'A'; c <= 'Z'; c++) {
+    const char *str = char_to_morse(c);
+    char c_result = morse_to_char(str);
+    printf("%c\t:\t%s\n", c, str);
   }
 }

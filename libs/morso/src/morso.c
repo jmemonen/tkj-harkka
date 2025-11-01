@@ -1,9 +1,19 @@
 #include "morso/morso.h"
+#include <inttypes.h>
 #include <stddef.h>
+#include <stdint.h>
+#include <stdio.h>
 
 #define CHAR_AMOUNT 26
 #define TO_ASCII_DIFF 32
 #define TO_IDX_DIFF 65
+#define MORSE_TREE_SIZE 29
+#define MAX_MORSE_SYMBOL_LEN 4
+#define DOT '.'
+#define DASH '-'
+
+#define DOT_IDX(idx) ((2) * (idx)) + (1)
+#define DASH_IDX(idx) ((2) * (idx)) + (2)
 
 static const char *const morse_lookup[CHAR_AMOUNT] = {
     ".-",   // A
@@ -34,6 +44,39 @@ static const char *const morse_lookup[CHAR_AMOUNT] = {
     "--.."  // Z
 };
 
+// A lookup binary tree represented by an array beginning with index = 0.
+// Dot means the left child: idx * 2 + 1.
+// Dash means the right child: idx * 2 + 2.
+static const char morse_tree[MORSE_TREE_SIZE] = {(char)MORSO_INVALID_INPUT,
+                                                 'e',
+                                                 't',
+                                                 'i',
+                                                 'a',
+                                                 'n',
+                                                 'm',
+                                                 's',
+                                                 'u',
+                                                 'r',
+                                                 'w',
+                                                 'd',
+                                                 'k',
+                                                 'g',
+                                                 'o',
+                                                 'h',
+                                                 'v',
+                                                 'f',
+                                                 (char)MORSO_INVALID_INPUT,
+                                                 'l',
+                                                 (char)MORSO_INVALID_INPUT,
+                                                 'p',
+                                                 'j',
+                                                 'b',
+                                                 'x',
+                                                 'c',
+                                                 'y',
+                                                 'z',
+                                                 'q'};
+
 const char *char_to_morse(char c) {
   if (c >= 'a' && c <= 'z') {
     c -= TO_ASCII_DIFF;
@@ -54,4 +97,22 @@ int str_to_morse(const char *str, char *buf, size_t buf_size) {
     return MORSO_BUF_OVERFLOW;
   }
   return -1;
+}
+
+// Parses a morse symbol string using a binary tree. BLAZINGLY fast enough!
+char morse_to_char(const char *str) {
+  if (str == NULL) {
+    return (char)MORSO_NULL_INPUT;
+  }
+  size_t len = 0;
+  size_t idx = 0;
+  while (*str && len <= MAX_MORSE_SYMBOL_LEN) {
+    idx = (*str == DOT) ? DOT_IDX(idx) : DASH_IDX(idx);
+    str++;
+    len++;
+  }
+  if (idx > MORSE_TREE_SIZE - 1) {
+    return (char)MORSO_INVALID_INPUT;
+  }
+  return morse_tree[idx];
 }
