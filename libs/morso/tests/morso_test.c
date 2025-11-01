@@ -1,8 +1,39 @@
 #include "morso/morso.h"
+#include <stddef.h>
 #include <stdio.h>
 
-int main(void) {
-  printf("Hello Morso!\n");
+void test_char_to_morse(void);
 
+int main(void) { 
+  test_char_to_morse();
   return 0;
+}
+
+void test_char_to_morse(void) {
+  for (char c = 'a'; c <= 'z'; c++) {
+    const char *str = char_to_morse(c);
+    if (str == NULL) {
+      printf("ERROR: couldn't encode char: %c\n", c);
+    }
+    printf("%c : %s\n", c, str);
+  }
+
+  for (char c = 'A'; c <= 'Z'; c++) {
+    const char *str = char_to_morse(c);
+    if (str == NULL) {
+      printf("ERROR: couldn't encode char: %c\n", c);
+    }
+    printf("%c : %s\n", c, str);
+  }
+
+  char invalid[] = " 1234567890";
+  char *c_ptr = invalid;
+  while (*c_ptr) {
+    const char *str = char_to_morse(*c_ptr);
+    if (str != NULL) {
+      printf("%c should have returned NULL! Returned: %s", *c_ptr, str);
+    }
+    printf("%d : %s\n", *c_ptr, str);
+    ++c_ptr;
+  }
 }
