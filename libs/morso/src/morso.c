@@ -15,6 +15,7 @@
 #define DOT_IDX(idx) ((2) * (idx)) + (1)
 #define DASH_IDX(idx) ((2) * (idx)) + (2)
 
+// TODO: Add support for numbers?
 static const char *const morse_lookup[CHAR_AMOUNT] = {
     ".-",   // A
     "-...", // B
@@ -104,15 +105,22 @@ char morse_to_char(const char *str) {
   if (str == NULL) {
     return (char)MORSO_NULL_INPUT;
   }
+
   size_t len = 0;
   size_t idx = 0;
+
   while (*str && len <= MAX_MORSE_SYMBOL_LEN) {
+    if (*str != DOT && *str != DASH) {
+      return (char)MORSO_INVALID_INPUT;
+    }
     idx = (*str == DOT) ? DOT_IDX(idx) : DASH_IDX(idx);
     str++;
     len++;
   }
-  if (idx > MORSE_TREE_SIZE - 1) {
+
+  if (idx >= MORSE_TREE_SIZE) {
     return (char)MORSO_INVALID_INPUT;
   }
+
   return morse_tree[idx];
 }
