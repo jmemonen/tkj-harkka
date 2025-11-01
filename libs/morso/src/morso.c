@@ -3,6 +3,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <string.h>
 
 #define CHAR_AMOUNT 26
 #define TO_ASCII_DIFF 32
@@ -11,6 +12,7 @@
 #define MAX_MORSE_SYMBOL_LEN 4
 #define DOT '.'
 #define DASH '-'
+#define SPACE ' '
 
 #define DOT_IDX(idx) ((2) * (idx)) + (1)
 #define DASH_IDX(idx) ((2) * (idx)) + (2)
@@ -89,17 +91,6 @@ const char *char_to_morse(char c) {
   return morse_lookup[c];
 }
 
-// TODO: WIP
-int str_to_morse(const char *str, char *buf, size_t buf_size) {
-  if (str == NULL || buf == NULL) {
-    return MORSO_NULL_INPUT;
-  }
-  if (buf_size < 1) {
-    return MORSO_BUF_OVERFLOW;
-  }
-  return -1;
-}
-
 // Parses a morse symbol string using a binary tree. BLAZINGLY fast enough!
 char morse_to_char(const char *str) {
   if (str == NULL) {
@@ -123,4 +114,51 @@ char morse_to_char(const char *str) {
   }
 
   return morse_tree[idx];
+}
+
+// TODO: Could be nicer...
+int encode_morse_msg(const char *str, char *buf, size_t buf_size) {
+  char *end = buf + buf_size - 1;
+  uint8_t needs_space = 0;
+
+  if (str == NULL || buf == NULL) {
+    return MORSO_NULL_INPUT;
+  }
+  if (buf_size < 1) {
+    return MORSO_BUF_OVERFLOW;
+  }
+
+  while (*str) {
+    char c = *str++;
+    if (buf > end) {
+      return MORSO_BUF_OVERFLOW;
+    }
+
+    // Space in input
+    if (c == SPACE) {
+      *buf++ = SPACE;
+      continue;
+    }
+
+    // Space to separate morse symbols.
+    if (needs_space) {
+      *buf++ = SPACE;
+      needs_space = 0;
+    }
+
+    const char *morse = char_to_morse(c);
+    if (!morse) {
+      return MORSO_INVALID_INPUT;
+    }
+    while (*morse) {
+      if (buf > end) {
+        return MORSO_BUF_OVERFLOW;
+      }
+      *buf++ = *morse++;
+    }
+    needs_space = 1;
+  }
+  *buf = '\0';
+
+  return MORSO_OK;
 }
