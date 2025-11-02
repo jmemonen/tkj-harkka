@@ -6,12 +6,14 @@ void test_char_to_morse(void);
 void test_morse_to_char(void);
 void test_encode_morse_msg(void);
 void test_decode_morse_msg(void);
+void test_encode_and_decode(void);
 
 int main(void) {
-  // test_char_to_morse();
-  // test_morse_to_char();
-  // test_encode_morse_msg();
+  test_char_to_morse();
+  test_morse_to_char();
+  test_encode_morse_msg();
   test_decode_morse_msg();
+  test_encode_and_decode();
   return 0;
 }
 
@@ -158,4 +160,20 @@ void test_decode_morse_msg(void) {
   res = decode_morse_msg(msg, buf, buf_size);
   printf("Decoded: %s\n", buf);
   printf("Result code: %d. Should be 2.\n", res);
+}
+
+void test_encode_and_decode(void) {
+  printf("\nTesting back and forth encoding\n");
+  char msg[13] = "aktivoitu ON";
+  const size_t BUF_SIZE = 64;
+  char buf[BUF_SIZE];
+
+  printf("Original message: %s\n", msg);
+  int res = encode_morse_msg(msg, buf, BUF_SIZE);
+  printf("Encoded: %s\n", buf);
+  printf("Result code: %d. Should be 0.\n", res);
+  printf("Decoding back.\n");
+  res = decode_morse_msg(buf, msg, 13);
+  printf("Decoded: %s\n", msg);
+  printf("Result code: %d. Should be 0.\n", res);
 }
