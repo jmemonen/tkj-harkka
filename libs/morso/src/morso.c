@@ -5,19 +5,24 @@
 #include <stdio.h>
 #include <string.h>
 
+// Values and limits
 #define CHAR_AMOUNT 26
 #define TO_ASCII_DIFF 32
 #define TO_IDX_DIFF 65
 #define MORSE_TREE_SIZE 29
 #define MAX_MORSE_SYMBOL_LEN 4
+
+// Symbols
 #define DOT '.'
 #define DASH '-'
 #define SPACE ' '
 
+// Macros
 #define DOT_IDX(idx) ((2) * (idx)) + (1)
 #define DASH_IDX(idx) ((2) * (idx)) + (2)
 
 // TODO: Add support for numbers?
+
 static const char *const morse_lookup[CHAR_AMOUNT] = {
     ".-",   // A
     "-...", // B
@@ -80,6 +85,8 @@ static const char morse_tree[MORSE_TREE_SIZE] = {(char)MORSO_INVALID_INPUT,
                                                  'z',
                                                  'q'};
 
+// Looks up morse symbol strings from the morse_lookup array.
+// The correct indices are calculated from ASCII values.
 const char *char_to_morse(char c) {
   if (c >= 'a' && c <= 'z') {
     c -= TO_ASCII_DIFF;
@@ -116,12 +123,12 @@ char morse_to_char(const char *str) {
   return morse_tree[idx];
 }
 
-// TODO: Could be nicer...
+// It is what it is.
 int encode_morse_msg(const char *str, char *buf, size_t buf_size) {
   char *end = buf + buf_size - 1;
   uint8_t needs_space = 0;
 
-  if (str == NULL || buf == NULL) {
+  if (!str || !buf) {
     return MORSO_NULL_INPUT;
   }
   if (buf_size < 1) {
@@ -130,22 +137,24 @@ int encode_morse_msg(const char *str, char *buf, size_t buf_size) {
 
   while (*str) {
     char c = *str++;
+
     if (buf > end) {
       return MORSO_BUF_OVERFLOW;
     }
 
-    // Space in input
+    // Handle space in input.
     if (c == SPACE) {
       *buf++ = SPACE;
       continue;
     }
 
-    // Space to separate morse symbols.
+    // Space as a separator between symbols.
     if (needs_space) {
       *buf++ = SPACE;
       needs_space = 0;
     }
 
+    // Copy the corresponding morse symbol string to buf.
     const char *morse = char_to_morse(c);
     if (!morse) {
       return MORSO_INVALID_INPUT;

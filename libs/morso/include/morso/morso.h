@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stddef.h>
+
 enum morso_error {
   MORSO_OK,
   MORSO_INVALID_INPUT,

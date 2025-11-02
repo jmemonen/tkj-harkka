@@ -59,28 +59,14 @@ void test_encode_morse_msg(void) {
   printf("\nEncoding message: %s :\t", str);
   int res = encode_morse_msg(str, buf, BUF_SIZE);
   printf("%s\n", buf);
-  printf("return code %d\n", res);
+  printf("return code %d. Should be 0.\n", res);
 
   buf[0] = '\0';
-  str = "1234";
+  str = "a hundred beers every day";
   printf("\nEncoding message: %s :\t", str);
   res = encode_morse_msg(str, buf, BUF_SIZE);
   printf("%s\n", buf);
-  printf("return code %d\n", res);
-
-  buf[0] = '\0';
-  str = "1234";
-  printf("\nEncoding message: %s :\t", str);
-  res = encode_morse_msg(str, buf, BUF_SIZE);
-  printf("%s\n", buf);
-  printf("return code %d\n", res);
-
-  buf[0] = '\0';
-  str = "1234";
-  printf("\nEncoding message: %s :\t", str);
-  res = encode_morse_msg(NULL, buf, BUF_SIZE);
-  printf("%s\n", buf);
-  printf("return code %d\n", res);
+  printf("return code %d. Should be 0\n", res);
 
   // Edge case where \0 should come immediately after a symbol.
   buf[0] = '\0';
@@ -89,5 +75,29 @@ void test_encode_morse_msg(void) {
   printf("\nEncoding message: %s :\t", str);
   res = encode_morse_msg(str, lil_buf, 2);
   printf("%s\n", lil_buf);
-  printf("return code %d\n", res);
+  printf("return code %d. Should be 0\n", res);
+
+  // Buffer overflow
+  lil_buf[0] = '\0';
+  str = "east bound and down loaded up and truckin";
+  printf("\nEncoding message: %s :\t", str);
+  res = encode_morse_msg(str, lil_buf, 2);
+  printf("%s\n", lil_buf);
+  printf("return code %d. Should be 2\n", res);
+
+  // Non-alphabetic symbols
+  buf[0] = '\0';
+  str = "1234";
+  printf("\nEncoding message: %s :\t", str);
+  res = encode_morse_msg(str, buf, BUF_SIZE);
+  printf("%s\n", buf);
+  printf("return code %d. Should be 1\n", res);
+
+  // Null in arguments
+  buf[0] = '\0';
+  str = "1234";
+  printf("\nEncoding message: %s :\t", str);
+  res = encode_morse_msg(NULL, buf, BUF_SIZE);
+  printf("%s\n", buf);
+  printf("return code %d. Should be 3\n", res);
 }
