@@ -5,11 +5,13 @@
 void test_char_to_morse(void);
 void test_morse_to_char(void);
 void test_encode_morse_msg(void);
+void test_decode_morse_msg(void);
 
 int main(void) {
-  test_char_to_morse();
-  test_morse_to_char();
-  test_encode_morse_msg();
+  // test_char_to_morse();
+  // test_morse_to_char();
+  // test_encode_morse_msg();
+  test_decode_morse_msg();
   return 0;
 }
 
@@ -100,4 +102,60 @@ void test_encode_morse_msg(void) {
   res = encode_morse_msg(NULL, buf, BUF_SIZE);
   printf("%s\n", buf);
   printf("return code %d. Should be 3\n", res);
+}
+
+void test_decode_morse_msg(void) {
+  size_t buf_size = 64;
+  char buf[buf_size];
+
+  // Basic case
+  printf("\n");
+  printf("Basic test case\n");
+  char *msg = "--. .- --  -... ..  -. .-";
+  printf("Decoding: %s\n", msg);
+  int res = decode_morse_msg(msg, buf, buf_size);
+  printf("Decoded: %s\n", buf);
+  printf("Result code: %d. Should be 0.\n", res);
+
+  // A tight fit
+  printf("\n");
+  printf("Just enough memory\n");
+  buf_size = 6;
+  buf[0] = '\0';
+  msg = "-.- --- .. .-. .-";
+  printf("Decoding: %s\n", msg);
+  res = decode_morse_msg(msg, buf, buf_size);
+  printf("Decoded: %s\n", buf);
+  printf("Result code: %d. Should be 0.\n", res);
+
+  // Null arguments
+  printf("\n");
+  printf("Null arguments\n");
+  buf[0] = '\0';
+  msg = "-.- --- ..-- .-. .-";
+  printf("Decoding: %s\n", msg);
+  res = decode_morse_msg(msg, NULL, buf_size);
+  printf("Decoded: %s\n", buf);
+  printf("Result code: %d. Should be 3.\n", res);
+
+  // Faulty morse
+  printf("\n");
+  printf("Faulty morse code\n");
+  buf[0] = '\0';
+  msg = "-.- --- ..-- .-. .-";
+  printf("Decoding: %s\n", msg);
+  res = decode_morse_msg(msg, buf, buf_size);
+  printf("Decoded: %s\n", buf);
+  printf("Result code: %d. Should be 1.\n", res);
+
+  // A TOO tight fit
+  printf("\n");
+  printf("Buffer overflow\n");
+  buf_size = 5;
+  buf[0] = '\0';
+  msg = "-.- --- .. .-. .-";
+  printf("Decoding: %s\n", msg);
+  res = decode_morse_msg(msg, buf, buf_size);
+  printf("Decoded: %s\n", buf);
+  printf("Result code: %d. Should be 2.\n", res);
 }

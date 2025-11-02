@@ -21,8 +21,12 @@
 #define DOT_IDX(idx) ((2) * (idx)) + (1)
 #define DASH_IDX(idx) ((2) * (idx)) + (2)
 
-// TODO: Add support for numbers?
+// A helper function to read the next morse symbol from a given string.
+// This increments the str pointer as a side effect!
+// (Basically a consuming verions of morse to char...)
+// int get_morse_symbol(const char **str, char *buf, size_t buf_size);
 
+// TODO: Add support for numbers?
 static const char *const morse_lookup[CHAR_AMOUNT] = {
     ".-",   // A
     "-...", // B
@@ -129,16 +133,19 @@ int encode_morse_msg(const char *msg, char *buf, size_t buf_size) {
   uint8_t needs_space = 0;
 
   if (!msg || !buf) {
+    *buf = '\0';
     return MORSO_NULL_INPUT;
   }
   if (buf_size < 1) {
+    *buf = '\0';
     return MORSO_BUF_OVERFLOW;
   }
 
   while (*msg) {
-    char c = *msg++;
+    const char c = *msg++;
 
     if (buf > end) {
+      *buf = '\0';
       return MORSO_BUF_OVERFLOW;
     }
 
@@ -157,16 +164,95 @@ int encode_morse_msg(const char *msg, char *buf, size_t buf_size) {
     // Copy the corresponding morse symbol string to buf.
     const char *morse = char_to_morse(c);
     if (!morse) {
+      *buf = '\0';
       return MORSO_INVALID_INPUT;
     }
     while (*morse) {
       if (buf > end) {
+        *buf = '\0';
         return MORSO_BUF_OVERFLOW;
       }
       *buf++ = *morse++;
     }
     needs_space = 1;
   }
+  *buf = '\0';
+
+  return MORSO_OK;
+}
+
+int decode_morse_msg(const char *msg, char *buf, size_t buf_size) {
+  if (!msg || !buf) {
+    return MORSO_NULL_INPUT;
+  }
+
+  if (buf_size < 1) {
+    *buf = '\0';
+    return MORSO_BUF_OVERFLOW;
+  }
+
+  char *end = buf + buf_size - 2; // Enough memory for the last char and \0
+  size_t idx = 0;
+  size_t len = 0;
+  uint8_t needs_space = 0;
+
+  while (*msg) {
+    const char c = *msg++;
+
+    if (buf > end) {
+      *buf = '\0';
+      return MORSO_BUF_OVERFLOW;
+    }
+
+    if (len > MAX_MORSE_SYMBOL_LEN) {
+      return MORSO_INVALID_INPUT;
+    }
+
+    if (needs_space) {
+      *buf++ = SPACE;
+      needs_space = 0;
+      continue;
+    }
+
+    // Handle a symbol separator. Emit the char and reset idx and len.
+    if (c == SPACE) {
+
+      // Traversal ended in invalid state.
+      if (idx >= MORSE_TREE_SIZE) {
+        *buf = '\0';
+        return MORSO_INVALID_INPUT;
+      }
+
+      char c_out = morse_tree[idx];
+      if (c_out == MORSO_INVALID_INPUT) {
+        *buf = '\0';
+        return MORSO_INVALID_INPUT;
+      }
+      *buf++ = c_out;
+      idx = 0;
+      len = 0;
+      // Add a space to buf if it was a double space.
+      needs_space = (*msg == SPACE) ? 1 : 0;
+      continue;
+    }
+
+    // Handle invalid sybols in msg.
+    if (c != DOT && c != DASH) {
+      *buf = '\0';
+      return MORSO_INVALID_INPUT;
+    }
+
+    // Traverse the tree based on the current dot or dash.
+    idx = (c == DOT) ? DOT_IDX(idx) : DASH_IDX(idx);
+    len++;
+  }
+
+  char c_out = morse_tree[idx];
+  if (c_out == MORSO_INVALID_INPUT) {
+    *buf = '\0';
+    return MORSO_INVALID_INPUT;
+  }
+  *buf++ = c_out;
   *buf = '\0';
 
   return MORSO_OK;

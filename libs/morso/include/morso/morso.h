@@ -18,7 +18,12 @@ enum morso_error {
 // 1: Invalid symbols in input string.
 // 2: Given buffer was too small for the encoded message.
 // 3: A parameter was NULL.
-int encode_morse_msg(const char *str, char *buf, size_t buf_size);
+int encode_morse_msg(const char *msg, char *buf, size_t buf_size);
+
+// Decodes a morse message into the given buffer.
+// Message must contain only dots, dashes and spaces and the null terminator.
+// buf_size must be >= 2.
+int decode_morse_msg(const char *msg, char *buf, size_t buf_size);
 
 // Returns a pointer to a morse string representation of the input char.
 // Input char must be between a-z or A-Z. Otherwise the function returns NULL.
