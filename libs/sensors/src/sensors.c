@@ -3,6 +3,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <math.h>
 
 // Field names for printing out in csv-form.
 const char IMU_FIELD_NAMES[] =
@@ -65,3 +66,33 @@ uint8_t get_position(const motion_data_t *data) {
 
 // Detect flicking motion
 //void detect_flicking(const motion_data_t *data) {}
+
+// Sensor fusion
+void sensor_fusion(motion_data_t *data, float alpha, float sample_time) {
+  // Check that given alpha is acceptable
+  if (alpha <= 0 || alpha > 1) {
+    return;
+  }
+  
+  // Complimentary filter estimates for phi (pitch) and theta (roll)
+  // Roll axis is y-axis and pitch axis is x-axis.
+  // Calculate angle estimates based on accelerometer data:
+  float phi_acc = atan2(data->ax, data->az);
+  float theta_acc = asinf(data->ay);
+
+  // Gyro data in rad/s
+  float p_rps = data->gy;
+  float q_rps = data->gx;
+  float r_rps = data->gz;
+
+  // Transform gyro measurements from body rates to Euler rates
+  float phi_gyro_rps = p_rps + sinf(phi_acc) * tanf(theta_acc) * q_rps 
+                      + cosf(phi_acc) * tanf(theta_acc) * r_rps;
+  float theta_gyro_rps = cosf(phi_acc) * q_rps - sin(phi_acc) * r_rps;
+
+  // Combine accelerometer estimates with integral of gyro readings
+  data->roll = alpha * phi_acc 
+              + (1.0f - alpha) * (phi_acc + (sample_time / 1000.0f) * phi_gyro_rps);
+  data->pitch = alpha * theta_acc 
+              + (1.0f - alpha) * (theta_acc + (sample_time / 1000.0f) * theta_acc);
+}

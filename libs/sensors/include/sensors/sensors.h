@@ -15,6 +15,8 @@ typedef struct {
   float gy;
   float gz;
   float t;
+  float pitch;
+  float roll;
   uint8_t error;
 } motion_data_t;
 
@@ -44,3 +46,9 @@ uint8_t get_position(const motion_data_t *data);
 
 // Detect flicking motion
 void detect_flicking(motion_data_t *data);
+
+// Combine accelerometer and gyro data.
+// Uses sensor fusion with simple complimentary filter.
+// Based on a python complimentary filter by Philip Salmony:
+// https://github.com/pms67/Attitude-Estimation/blob/master/complimentary_imu.py
+void sensor_fusion(motion_data_t *data, float alpha, float sample_time);
