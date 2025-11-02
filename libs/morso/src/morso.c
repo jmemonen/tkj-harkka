@@ -124,19 +124,19 @@ char morse_to_char(const char *str) {
 }
 
 // It is what it is.
-int encode_morse_msg(const char *str, char *buf, size_t buf_size) {
+int encode_morse_msg(const char *msg, char *buf, size_t buf_size) {
   char *end = buf + buf_size - 1;
   uint8_t needs_space = 0;
 
-  if (!str || !buf) {
+  if (!msg || !buf) {
     return MORSO_NULL_INPUT;
   }
   if (buf_size < 1) {
     return MORSO_BUF_OVERFLOW;
   }
 
-  while (*str) {
-    char c = *str++;
+  while (*msg) {
+    char c = *msg++;
 
     if (buf > end) {
       return MORSO_BUF_OVERFLOW;
