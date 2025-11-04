@@ -68,12 +68,13 @@ static void sensor_task(void *arg) {
       continue;
     }
 
+    sensor_fusion(&motion_data, 0.3, 100);
     // Prints for dev and debug
-    // format_motion_csv(&motion_data, buf, MOTION_BUF_SIZE);
-    // usb_serial_print(buf);
-    // usb_serial_flush();
+    format_motion_csv(&motion_data, buf, MOTION_BUF_SIZE);
+    usb_serial_print(buf);
+    usb_serial_flush();
 
-    vTaskDelay(pdMS_TO_TICKS(10));
+    vTaskDelay(pdMS_TO_TICKS(50));
   }
 }
 
@@ -205,10 +206,12 @@ int main() {
   result =
       xTaskCreate(sensor_task, "sensor", DEFAULT_STACK_SIZE, NULL, 2, &sensorTask);
 
+/*
   result =
       xTaskCreate(motion_task, "motion", DEFAULT_STACK_SIZE, NULL, 2, &motionTask);
+*/
 
-  // These have to be right before the scheduler.
+// These have to be right before the scheduler.
   tusb_init();
   usb_serial_init();
   // Start the scheduler (never returns)
