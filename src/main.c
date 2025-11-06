@@ -68,13 +68,15 @@ static void sensor_task(void *arg) {
       continue;
     }
 
-    sensor_fusion(&motion_data, 0.3, 100);
+    sensor_fusion(&motion_data, 0.02, 10);
     // Prints for dev and debug
-    format_motion_csv(&motion_data, buf, MOTION_BUF_SIZE);
+    // format_motion_csv(&motion_data, buf, MOTION_BUF_SIZE);
+    // usb_serial_print(buf);
+    // usb_serial_flush();
+    snprintf(buf, MOTION_BUF_SIZE,"%.3f,%.3f,45,-45\r\n", motion_data.pitch, motion_data.roll);
     usb_serial_print(buf);
     usb_serial_flush();
-
-    vTaskDelay(pdMS_TO_TICKS(50));
+    vTaskDelay(pdMS_TO_TICKS(10));
   }
 }
 

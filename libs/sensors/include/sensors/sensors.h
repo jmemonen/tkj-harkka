@@ -4,6 +4,10 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#define PI_F 3.1415927f
+#define RAD_TO_DEG (180.0f / PI_F)
+#define DEG_TO_RAD (PI_F / 180.0f)
+
 enum position { DOT_STATE, DASH_STATE, WHITESPACE_STATE };
 enum motion { WAITING, MOVING, COOLDOWN };
 
