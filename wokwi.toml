@@ -1,0 +1,5 @@
+[wokwi]
+version = 1
+
+# firmware = 'build/hat_app.uf2'
+firmware = 'build/libs/sensors/buzzer_test/buzzer_test.uf2'
