@@ -11,6 +11,7 @@
 #define TO_IDX_DIFF 65
 #define MORSE_TREE_SIZE 29
 #define MAX_MORSE_SYMBOL_LEN 4
+#define MSG_RIGHT_PADDING 4 // Enough memory for '   \0' to end the message.
 
 // Symbols
 #define DOT '.'
@@ -256,4 +257,61 @@ int decode_morse_msg(const char *msg, char *buf, size_t buf_size) {
   *buf = '\0';
 
   return MORSO_OK;
+}
+
+static inline void reset_inp_buf(msg_builder_t *b) {
+  b->inp_buf[0] = '\0';
+  b->inp_len = 0;
+}
+
+// TODO: Kind of a WIP...
+// It would kinda be easier to just store the msg as ASCII where every
+// symbol is a single char? Easy to encode that into morse when needed.
+int msg_write(msg_builder_t *b, char c) {
+  if (!b) {
+    return MORSO_NULL_INPUT;
+  }
+
+  // Handle any buffer being full.
+  if (b->inp_len >= MAX_MORSE_SYMBOL_LEN ||
+      b->msg_len > b->msg_size - MSG_RIGHT_PADDING) {
+    // Truncate the msg with '\0'.
+    b->msg[b->msg_len] = '\0';
+    // Reset inp_buf.
+    reset_inp_buf(b);
+    return MORSO_BUF_OVERFLOW;
+  }
+
+  switch (c) {
+  case DOT:
+  case DASH:
+    b->inp_buf[b->inp_len++] = c;
+    b->inp_buf[b->inp_len] = '\0';
+    b->inp = morse_to_char(b->inp_buf);
+    return MORSO_OK;
+
+  case SPACE:
+    // No input
+    if (b->inp_len == 0) {
+      return MORSO_NULL_INPUT;
+    }
+    if (b->msg_len + b->inp_len + 1 >= b->msg_size) {
+      // Not enough memory in the msg buffer.
+      b->msg[b->msg_len] = '\0';
+      reset_inp_buf(b);
+      return MORSO_BUF_OVERFLOW;
+    }
+    for (size_t idx = 0; idx < b->inp_len; idx++) {
+      b->msg[b->msg_len++] = b->inp_buf[idx];
+    }
+    b->msg[b->msg_len++] = ' ';
+    b->msg[b->msg_len] = '\0';
+    reset_inp_buf(b);
+    return MORSO_OK;
+
+  default:
+    // Reset the inp buffer and return an error code.
+    reset_inp_buf(b);
+    return MORSO_INVALID_INPUT;
+  }
 }

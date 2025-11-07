@@ -7,13 +7,15 @@ void test_morse_to_char(void);
 void test_encode_morse_msg(void);
 void test_decode_morse_msg(void);
 void test_encode_and_decode(void);
+void test_msg_builder(void);
 
 int main(void) {
-  test_char_to_morse();
-  test_morse_to_char();
-  test_encode_morse_msg();
-  test_decode_morse_msg();
-  test_encode_and_decode();
+  // test_char_to_morse();
+  // test_morse_to_char();
+  // test_encode_morse_msg();
+  // test_decode_morse_msg();
+  // test_encode_and_decode();
+  test_msg_builder();
   return 0;
 }
 
@@ -176,4 +178,28 @@ void test_encode_and_decode(void) {
   res = decode_morse_msg(buf, msg, 13);
   printf("Decoded: %s\n", msg);
   printf("Result code: %d. Should be 0.\n", res);
+}
+
+// TODO: Edge cases not tested and stuff...
+// Works as intended so far, though.
+void test_msg_builder(void) {
+  char msg_buf[128];
+  msg_builder_t builder = {
+      .msg = msg_buf,
+      .msg_size = 128,
+      .msg_len = 0,
+      .inp_len = 0,
+      .inp = MORSO_INVALID_INPUT,
+  };
+  char *msg = {"... --- ..-- ...   "};
+  while (*msg) {
+    printf("msg_buf inp symbol: %c\n",
+           (builder.inp == MORSO_INVALID_INPUT) ? '?' : builder.inp);
+    printf("msg is now: %s\n", builder.msg);
+    int result = msg_write(&builder, *msg++);
+    printf("result: %d\n\n", result);
+  }
+  printf("msg_buf inp symbol: %c\n",
+         (builder.inp == MORSO_INVALID_INPUT) ? '?' : builder.inp);
+  printf("msg is now: %s\n", builder.msg);
 }

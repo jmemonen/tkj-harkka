@@ -9,6 +9,21 @@ enum morso_status {
   MORSO_NULL_INPUT
 };
 
+// morso_msg_t
+// A convenient message buffer for building morse code strings.
+typedef struct {
+  char *msg;
+  size_t msg_size;
+  size_t msg_len;
+
+  char inp_buf[5]; //TODO: magic number...
+  size_t inp_len;
+  char inp;
+} msg_builder_t;
+
+// Write a dot, dash or space to a msg_builder_t.
+int msg_write(msg_builder_t *b, char c);
+
 // Encodes a alphabetic message as morse code into the given buffer.
 // So far supports only alphabetical ASCII strings with aA-zZ
 // where words are separated by spaces eg. "my cool message".
