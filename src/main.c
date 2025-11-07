@@ -1,3 +1,4 @@
+#include <stddef.h>
 #include <stdint.h>
 #include <string.h>
 
@@ -20,6 +21,7 @@
 #define CDC_ITF_TX 1
 #define MOTION_BUF_SIZE 128
 #define EXP_MOV_AVG_ALPHA 0.25
+#define GESTURE_COOLDOWN_DELAY 10
 
 static motion_data_t motion_data;
 static uint8_t gesture_state = STATE_COOLDOWN;
@@ -59,7 +61,7 @@ static void sensorTask(void *arg) {
       continue;
     }
 
-    // Prints for dev and debug
+    // ******* Prints for dev and debug ********
     // format_motion_csv(&motion_data, buf, MOTION_BUF_SIZE);
     // usb_serial_print(buf);
     // usb_serial_flush();
@@ -80,9 +82,18 @@ static void position_task(void *arg) {
     usb_serial_flush();
   }
 
+  size_t cooldown_delay = GESTURE_COOLDOWN_DELAY;
+
   for (;;) {
 
     Gesture_t gst = detect_gesture(&motion_data);
+
+    // TODO: Is this a bit crude? Could just compare timestamps?
+    if (cooldown_delay) {
+      --cooldown_delay;
+      vTaskDelay(pdMS_TO_TICKS(5));
+      continue;
+    }
 
     switch (gst) {
 
@@ -97,6 +108,7 @@ static void position_task(void *arg) {
       if (gesture_state == STATE_READY) {
         gesture_state = STATE_COOLDOWN;
         usb_serial_print("DOT\r\n");
+        cooldown_delay = GESTURE_COOLDOWN_DELAY;
       }
       break;
 
@@ -104,6 +116,15 @@ static void position_task(void *arg) {
       if (gesture_state == STATE_READY) {
         gesture_state = STATE_COOLDOWN;
         usb_serial_print("DASH\r\n");
+        cooldown_delay = GESTURE_COOLDOWN_DELAY;
+      }
+      break;
+
+    case GESTURE_SPACE:
+      if (gesture_state == STATE_READY) {
+        gesture_state = STATE_COOLDOWN;
+        usb_serial_print("SPACE\r\n");
+        cooldown_delay = GESTURE_COOLDOWN_DELAY;
       }
       break;
 
