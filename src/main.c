@@ -1,4 +1,4 @@
-#include <pico/time.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <string.h>
 
@@ -21,9 +21,10 @@
 #define CDC_ITF_TX 1
 #define MOTION_BUF_SIZE 128
 #define EXP_MOV_AVG_ALPHA 0.25
+#define GESTURE_COOLDOWN_DELAY 10
 
 static motion_data_t motion_data;
-static uint8_t position_state = DASH_STATE;
+static uint8_t gesture_state = STATE_COOLDOWN;
 
 // Activates the TinyUSB library.
 static void usbTask(void *arg) {
@@ -60,12 +61,12 @@ static void sensorTask(void *arg) {
       continue;
     }
 
-    // Prints for dev and debug
-    // format_motion_csv(&motion_data, buf, MOTION_BUF_SIZE);
-    // usb_serial_print(buf);
-    // usb_serial_flush();
+    // ******* Prints for dev and debug ********
+    format_motion_csv(&motion_data, buf, MOTION_BUF_SIZE);
+    usb_serial_print(buf);
+    usb_serial_flush();
 
-    vTaskDelay(pdMS_TO_TICKS(10));
+    vTaskDelay(pdMS_TO_TICKS(5));
   }
 }
 
@@ -81,29 +82,81 @@ static void position_task(void *arg) {
     usb_serial_flush();
   }
 
+  size_t cooldown_delay = GESTURE_COOLDOWN_DELAY;
+
   for (;;) {
-    uint8_t new_position = get_position(&motion_data);
-    if (new_position != position_state) {
-      position_state = new_position;
-      switch (position_state) {
-      case DOT_STATE:
-        usb_serial_print("New state: DOT\r\n");
-        break;
-      case DASH_STATE:
-        usb_serial_print("New state: DASH\r\n");
-        break;
-      case WHITESPACE_STATE:
-        usb_serial_print("New state: WHITESPACE\r\n");
-      }
-      usb_serial_flush();
+
+    Gesture_t gst = detect_gesture(&motion_data);
+
+    // TODO: Is this a bit crude? Could just compare timestamps?
+    if (cooldown_delay) {
+      --cooldown_delay;
+      vTaskDelay(pdMS_TO_TICKS(5));
+      continue;
     }
 
-    vTaskDelay(pdMS_TO_TICKS(100));
+    switch (gst) {
+
+    case GESTURE_READY:
+      if (gesture_state == STATE_COOLDOWN) {
+        gesture_state = STATE_READY;
+        // usb_serial_print("READY\r\n");
+      }
+      break;
+
+    case GESTURE_DOT:
+      if (gesture_state == STATE_READY) {
+        gesture_state = STATE_COOLDOWN;
+        usb_serial_print("DOT\r\n");
+        // cooldown_delay = GESTURE_COOLDOWN_DELAY;
+      }
+      break;
+
+    case GESTURE_DASH:
+      if (gesture_state == STATE_READY) {
+        gesture_state = STATE_COOLDOWN;
+        usb_serial_print("DASH\r\n");
+        // cooldown_delay = GESTURE_COOLDOWN_DELAY;
+      }
+      break;
+
+    case GESTURE_SPACE:
+      if (gesture_state == STATE_READY) {
+        gesture_state = STATE_COOLDOWN;
+        usb_serial_print("SPACE\r\n");
+        // cooldown_delay = GESTURE_COOLDOWN_DELAY;
+      }
+      break;
+
+    default:
+      break;
+    }
+
+    usb_serial_flush();
+
+    // uint8_t new_position = get_position(&motion_data);
+    // if (new_position != position_state) {
+    //   position_state = new_position;
+    //   switch (position_state) {
+    //   case DOT_STATE:
+    //     usb_serial_print("New state: DOT\r\n");
+    //     break;
+    //   case DASH_STATE:
+    //     usb_serial_print("New state: DASH\r\n");
+    //     break;
+    //   case WHITESPACE_STATE:
+    //     usb_serial_print("New state: WHITESPACE\r\n");
+    //   }
+    //   usb_serial_flush();
+    // }
+
+    vTaskDelay(pdMS_TO_TICKS(5));
   }
 }
 
 int main() {
   // stdio_init_all();
+
   // Uncomment this lines if you want to wait till the serial monitor is
   // connected
   /*while (!stdio_usb_connected()){
@@ -121,9 +174,6 @@ int main() {
   } else {
     usb_serial_print("Failed to initialize ICM-42670P.\r\n");
   }
-
-  // init_ICM42670(); // TODO: check return value for errors...
-  // ICM42670_start_with_default_values();
 
   TaskHandle_t positionTask, hUSB, sensor = NULL;
 
@@ -143,7 +193,7 @@ int main() {
       &positionTask);     // (en) A handle to control the execution of this task
 
   if (result != pdPASS) {
-    usb_serial_print("Example Task creation failed\n");
+    usb_serial_print("Positoin Task creation failed\n");
     return 0;
   }
 
