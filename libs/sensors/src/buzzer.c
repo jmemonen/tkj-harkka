@@ -1,4 +1,5 @@
 #include <FreeRTOS.h>
+#include <task.h>
 #include "tkjhat/sdk.h"
 #include "sensors/buzzer.h"
 
@@ -10,16 +11,16 @@
 #define WORD_PAUSE            (MORSE_CODE_UNIT * 7) // Pause duration between words
 #define MORSE_TONE_FREQUENCY  600
 
-void play_message(char *msg) {
+void buzzer_play_message(char *msg) {
   while (*msg) {
     if (*msg == '.') {
       buzzer_play_tone(MORSE_TONE_FREQUENCY, DOT_BUZZ_DURATION);
-      sleep_ms(INTRA_CHAR_PAUSE);
+      vTaskDelay(pdMS_TO_TICKS(INTRA_CHAR_PAUSE));
       msg++;
     }
     else if (*msg == '-') {
       buzzer_play_tone(MORSE_TONE_FREQUENCY, DASH_BUZZ_DURATION);
-      sleep_ms(INTRA_CHAR_PAUSE);
+      vTaskDelay(pdMS_TO_TICKS(INTRA_CHAR_PAUSE));
       msg++;
     }
     else if (*msg == ' ') {
@@ -32,11 +33,11 @@ void play_message(char *msg) {
 
       if (space_count == 1) {
         // Character pause
-        sleep_ms(INTER_CHAR_PAUSE - INTRA_CHAR_PAUSE);
+        vTaskDelay(pdMS_TO_TICKS(INTER_CHAR_PAUSE - INTRA_CHAR_PAUSE));
       }
       else if (space_count == 2) {
         // Word pause
-        sleep_ms(WORD_PAUSE - INTRA_CHAR_PAUSE);
+        vTaskDelay(pdMS_TO_TICKS(WORD_PAUSE - INTRA_CHAR_PAUSE));
       }
       else if (space_count == 3) {
         // Message ends

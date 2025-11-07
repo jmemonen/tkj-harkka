@@ -1,21 +1,36 @@
 #include <stdio.h>
+#include <FreeRTOS.h>
+#include <task.h>
+
 #include <tkjhat/sdk.h>
-// #include <sensors/sensors.h>
 #include <sensors/buzzer.h>
 
+
+
+// Buzzer task
+static void buzzer_task(void *arg) {
+  (void)arg;
+  
+  char msg[] = "- . .-. ...- .  .--- .-  -.- .. .. - --- ...  -.- .- .-.. --- .. ... - .-   ";
+
+  for (;;) {
+    buzzer_play_message(msg);
+    vTaskDelay(pdMS_TO_TICKS(2000));
+  }
+}
 
 int main() {
   stdio_init_all();
   init_buzzer();
 
-  char msg[] = "... --- ...  ... --- ...   ";
-
-  sleep_ms(1000);
-
-  while (true) {
-    play_message(msg);
-    sleep_ms(2000);
-  }
+  sleep_ms(3000);
   
+  TaskHandle_t buzzerTask = NULL;
+
+  BaseType_t result =
+      xTaskCreate(buzzer_task, "buzzer", 2048, NULL, 2, &buzzerTask);
+
+  vTaskStartScheduler();
+
   return 0;
 }
