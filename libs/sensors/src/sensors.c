@@ -74,18 +74,18 @@ Gesture_t detect_gesture(const motion_data_t *data) {
     return GESTURE_READY;
   }
 
-  if (data->az < 30.0 && data->gx > 100.0) {
+  if (data->az < 0.3 && data->gx > 150.0) {
     return GESTURE_SPACE;
+  }
+
+  // Right flick.
+  if (data->ax < -0.5 && data->gy + data->gz < -100) {
+    return GESTURE_DASH;
   }
 
   // Left flick.
   if (data->ax > 0.5 && data->gy + data->gz > 100) {
     return GESTURE_DOT;
   }
-  // Right flick.
-  if (data->ax < -0.5 && data->gy + data->gz < -100) {
-    return GESTURE_DASH;
-  }
-
   return GESTURE_NONE;
 }

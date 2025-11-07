@@ -62,9 +62,9 @@ static void sensorTask(void *arg) {
     }
 
     // ******* Prints for dev and debug ********
-    // format_motion_csv(&motion_data, buf, MOTION_BUF_SIZE);
-    // usb_serial_print(buf);
-    // usb_serial_flush();
+    format_motion_csv(&motion_data, buf, MOTION_BUF_SIZE);
+    usb_serial_print(buf);
+    usb_serial_flush();
 
     vTaskDelay(pdMS_TO_TICKS(5));
   }
@@ -100,7 +100,7 @@ static void position_task(void *arg) {
     case GESTURE_READY:
       if (gesture_state == STATE_COOLDOWN) {
         gesture_state = STATE_READY;
-        usb_serial_print("READY\r\n");
+        // usb_serial_print("READY\r\n");
       }
       break;
 
@@ -108,7 +108,7 @@ static void position_task(void *arg) {
       if (gesture_state == STATE_READY) {
         gesture_state = STATE_COOLDOWN;
         usb_serial_print("DOT\r\n");
-        cooldown_delay = GESTURE_COOLDOWN_DELAY;
+        // cooldown_delay = GESTURE_COOLDOWN_DELAY;
       }
       break;
 
@@ -116,7 +116,7 @@ static void position_task(void *arg) {
       if (gesture_state == STATE_READY) {
         gesture_state = STATE_COOLDOWN;
         usb_serial_print("DASH\r\n");
-        cooldown_delay = GESTURE_COOLDOWN_DELAY;
+        // cooldown_delay = GESTURE_COOLDOWN_DELAY;
       }
       break;
 
@@ -124,7 +124,7 @@ static void position_task(void *arg) {
       if (gesture_state == STATE_READY) {
         gesture_state = STATE_COOLDOWN;
         usb_serial_print("SPACE\r\n");
-        cooldown_delay = GESTURE_COOLDOWN_DELAY;
+        // cooldown_delay = GESTURE_COOLDOWN_DELAY;
       }
       break;
 
