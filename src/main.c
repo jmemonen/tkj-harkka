@@ -48,13 +48,6 @@ static void sensorTask(void *arg) {
     usb_serial_flush();
   }
 
-  if (init_ICM42670() == 0) {
-    usb_serial_print("ICM-42670P initialized successfully!\r\n");
-    ICM42670_start_with_default_values(); // TODO: Handle error values?
-  } else {
-    usb_serial_print("Failed to initialize ICM-42670P.\r\n");
-  }
-
   motion_data.error = 0;
   usb_serial_print(IMU_FIELD_NAMES);
 
@@ -121,6 +114,13 @@ int main() {
   init_i2c_default();
   sleep_ms(1000); // Wait some time so initialization of USB and hat is done.
   init_red_led();
+
+  if (init_ICM42670() == 0) {
+    usb_serial_print("ICM-42670P initialized successfully!\r\n");
+    ICM42670_start_with_default_values(); // TODO: Handle error values?
+  } else {
+    usb_serial_print("Failed to initialize ICM-42670P.\r\n");
+  }
 
   // init_ICM42670(); // TODO: check return value for errors...
   // ICM42670_start_with_default_values();
