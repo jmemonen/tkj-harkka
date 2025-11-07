@@ -21,12 +21,8 @@
 #define MOTION_BUF_SIZE 128
 #define EXP_MOV_AVG_ALPHA 0.25
 
-#define ABS(x) (((x) < (0)) ? (-x) : (x))
-
-enum Gesture_State { READY, COOLDOWN };
-
 static motion_data_t motion_data;
-static uint8_t gesture_state = COOLDOWN;
+static uint8_t gesture_state = STATE_COOLDOWN;
 
 // Activates the TinyUSB library.
 static void usbTask(void *arg) {
@@ -85,26 +81,37 @@ static void position_task(void *arg) {
   }
 
   for (;;) {
-    if (gesture_state == COOLDOWN) {
-      float gyro_sum =
-          ABS(motion_data.gx) + ABS(motion_data.gy) + ABS(motion_data.gz);
-      // TODO: make thresholds constants somewhere.
-      if (gyro_sum < 25.0 && motion_data.az > 0.7 && motion_data.ay < -0.3) {
-        gesture_state = READY;
+
+    Gesture_t gst = detect_gesture(&motion_data);
+
+    switch (gst) {
+
+    case GESTURE_READY:
+      if (gesture_state == STATE_COOLDOWN) {
+        gesture_state = STATE_READY;
         usb_serial_print("READY\r\n");
       }
+      break;
+
+    case GESTURE_DOT:
+      if (gesture_state == STATE_READY) {
+        gesture_state = STATE_COOLDOWN;
+        usb_serial_print("DOT\r\n");
+      }
+      break;
+
+    case GESTURE_DASH:
+      if (gesture_state == STATE_READY) {
+        gesture_state = STATE_COOLDOWN;
+        usb_serial_print("DASH\r\n");
+      }
+      break;
+
+    default:
+      break;
     }
 
-    if (gesture_state == READY) {
-      if (motion_data.ax > 0.5 && motion_data.gy + motion_data.gz > 100) {
-        usb_serial_print("DOT\r\n");
-        gesture_state = COOLDOWN;
-      } else if (motion_data.ax < -0.5 &&
-                 motion_data.gy + motion_data.gz < -100) {
-        usb_serial_print("DASH\r\n");
-        gesture_state = COOLDOWN;
-      }
-    }
+    usb_serial_flush();
 
     // uint8_t new_position = get_position(&motion_data);
     // if (new_position != position_state) {

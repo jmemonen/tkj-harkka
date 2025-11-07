@@ -4,6 +4,8 @@
 #include <stdint.h>
 #include <stdio.h>
 
+#define ABS(x) (((x) < (0)) ? (-x) : (x))
+
 // Field names for printing out in csv-form.
 const char IMU_FIELD_NAMES[] =
     "accel_x,accel_y,accel_z,gyro_x,gyro_y,gyro_z,tmp\r\n";
@@ -53,7 +55,8 @@ void read_filtered_motion_data(motion_data_t *data, float alpha) {
 
 uint8_t get_position(const motion_data_t *data) {
   // TODO: Away with magic numbers and such.
-  // TODO: Works pretty well for something so simple. Could be smoother, though...
+  // TODO: Works pretty well for something so simple. Could be smoother,
+  // though...
   if (data->ay < -0.7) {
     return WHITESPACE_STATE;
   }
@@ -61,4 +64,24 @@ uint8_t get_position(const motion_data_t *data) {
     return DASH_STATE;
   }
   return DOT_STATE;
+}
+
+Gesture_t detect_gesture(const motion_data_t *data) {
+  // TODO: make thresholds constants somewhere.
+  float gyro_sum = ABS(data->gx) + ABS(data->gy) + ABS(data->gz);
+  // Minimal movement and a neutral position.
+  if (gyro_sum < 25.0 && data->az > 0.7 && data->ay < -0.3) {
+    return GESTURE_READY;
+  }
+
+  // Left flick.
+  if (data->ax > 0.5 && data->gy + data->gz > 100) {
+    return GESTURE_DOT;
+  }
+  // Right flick.
+  if (data->ax < -0.5 && data->gy + data->gz < -100) {
+    return GESTURE_DASH;
+  }
+
+  return GESTURE_NONE;
 }
