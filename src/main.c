@@ -28,7 +28,7 @@
 #define CDC_ITF_TX 1
 #define MOTION_BUF_SIZE 128
 #define EXP_MOV_AVG_ALPHA 0.25
-#define GESTURE_COOLDOWN_DELAY 20
+#define GESTURE_COOLDOWN_DELAY 10
 #define MSG_BUILDER_BUF_SIZE 256
 
 static motion_data_t motion_data;
