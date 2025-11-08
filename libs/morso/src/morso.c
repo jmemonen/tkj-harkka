@@ -13,11 +13,6 @@
 #define MSG_RIGHT_PADDING 3
 #define END_OF_MSG " \n"
 
-// Symbols
-#define DOT '.'
-#define DASH '-'
-#define SPACE ' '
-
 // Macros
 #define DOT_IDX(idx) ((2) * (idx)) + (1)
 #define DASH_IDX(idx) ((2) * (idx)) + (2)
@@ -303,18 +298,21 @@ int msg_write(msg_builder_t *b, char c) {
     return MORSO_MSG_READY;
   }
 
-  // Handle any buffer being full.
-  if (b->inp_len >= _MORSO_MAX_SYMBOL_LEN || b->msg_len > b->msg_max_len) {
+  // Handle msg buffer being full.
+  if (b->msg_len > b->msg_max_len) {
     // Truncate the msg with '\0'.
     b->msg_buf[b->msg_len] = '\0'; // TODO: Add end of message sequence?
-    // Reset inp_buf.
-    msg_reset_inp(b);
     return MORSO_BUF_OVERFLOW;
   }
 
   switch (c) {
   case DOT:
   case DASH:
+    // printf("    Adding DOT/DASH when inp_len: %d \n", b->inp_len);
+    if (b->inp_len >= _MORSO_MAX_SYMBOL_LEN) {
+      msg_reset_inp(b);
+      return MORSO_INVALID_INPUT;
+    }
     b->inp_buf[b->inp_len++] = c;
     b->inp_buf[b->inp_len] = '\0';
     b->inp = morse_to_char(b->inp_buf);
@@ -325,6 +323,11 @@ int msg_write(msg_builder_t *b, char c) {
     if (b->inp_len == 0) {
       return MORSO_NULL_INPUT;
     }
+
+    if (b->inp == MORSO_INVALID_INPUT) {
+        msg_reset_inp(b);
+        return MORSO_INVALID_INPUT;
+      }
     // Here the msg_max_len + 1 offsets the max len to account for the
     // space that always follows the last morse symbol.
     // So we need only 3 bytes to properly end the message.
@@ -363,7 +366,7 @@ int msg_ready(msg_builder_t *b) {
   const char *eom = END_OF_MSG;
   size_t debug_idx = 0;
   while (*eom) {
-    printf("   @msg_ready, i:%d\n", debug_idx++);
+    // printf("   @msg_ready, i:%d\n", debug_idx++);
     b->msg_buf[b->msg_len++] = *eom++;
   }
   b->msg_buf[b->msg_len] = '\0';
