@@ -15,6 +15,8 @@
 #include "tkjhat/sdk.h"
 #include "usbSerialDebug/helper.h"
 
+#include "morso/morso.h"
+
 // Default stack size for the tasks. It can be reduced to 1024 if task is not
 // using lot of memory.
 #define DEFAULT_STACK_SIZE 2048
@@ -22,9 +24,11 @@
 #define MOTION_BUF_SIZE 128
 #define EXP_MOV_AVG_ALPHA 0.25
 #define GESTURE_COOLDOWN_DELAY 10
+#define MSG_BUILDER_BUF_SIZE 256
 
 static motion_data_t motion_data;
 static uint8_t gesture_state = STATE_COOLDOWN;
+static msg_builder_t msg_b;
 
 // Activates the TinyUSB library.
 static void usbTask(void *arg) {
@@ -174,6 +178,10 @@ int main() {
   } else {
     usb_serial_print("Failed to initialize ICM-42670P.\r\n");
   }
+
+  // Init msg builder/buffer
+  char msg_buf[MSG_BUILDER_BUF_SIZE];
+  msg_init(&msg_b, msg_buf, MSG_BUILDER_BUF_SIZE);
 
   TaskHandle_t positionTask, hUSB, sensor = NULL;
 
