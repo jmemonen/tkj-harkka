@@ -82,7 +82,7 @@ static void sensorTask(void *arg) {
   }
 }
 
-static void position_task(void *arg) {
+static void gesture_task(void *arg) {
   (void)arg;
 
   while (!tud_mounted() || !tud_cdc_n_connected(1)) {
@@ -90,7 +90,7 @@ static void position_task(void *arg) {
   }
 
   if (usb_serial_connected()) {
-    usb_serial_print("position_task started...\r\n");
+    usb_serial_print("gesture started...\r\n");
     usb_serial_flush();
   }
 
@@ -105,14 +105,20 @@ static void position_task(void *arg) {
 
     // TODO: Is this a bit crude? Could just compare timestamps?
     if (cooldown_delay) {
-      --cooldown_delay;
+      // Cooldown only in neutral position.
+      if (gst == GESTURE_READY) {
+        --cooldown_delay;
+      } else {
+        cooldown_delay = GESTURE_COOLDOWN_DELAY;
+      }
       vTaskDelay(pdMS_TO_TICKS(5));
       continue;
     }
 
     switch (gst) {
-      // TODO: Redundancy in the cases, but that could be necessary
-      // later on if more specific actions are neede on different gestures?
+      // TODO: These are kinda redundant cases, BUT the separation could be
+      // useful later on if more specific actions are needed on different
+      // gestures?
     case GESTURE_READY:
       if (gesture_state == STATE_COOLDOWN) {
         gesture_state = STATE_READY;
@@ -122,53 +128,24 @@ static void position_task(void *arg) {
 
     case GESTURE_DOT:
       if (gesture_state == STATE_READY) {
-        if (msg_b.inp_len >= 4) {
-          usb_serial_print("inp buffer full...\r\n");
-          usb_serial_flush();
-        }
-        usb_serial_print("\n@ GESTURE DOT\r\n");
-        usb_serial_flush();
-
-        if (msg_b.inp_len >= 4) {
-          usb_serial_print("  inp gets too long!");
-          usb_serial_flush();
-        }
         msg_write(&msg_b, DOT);
         gst_read = 1;
         cooldown_delay = GESTURE_COOLDOWN_DELAY;
         gesture_state = STATE_COOLDOWN;
-
-        snprintf(debug_buf, 256, "inp_len: %d\r\n", msg_b.inp_len);
-        usb_serial_print(debug_buf);
-        usb_serial_flush();
       }
       break;
 
     case GESTURE_DASH:
       if (gesture_state == STATE_READY) {
-        if (msg_b.inp_len >= 4) {
-          usb_serial_print("inp buffer full...\r\n");
-          usb_serial_flush();
-        }
-        usb_serial_print("\n@ GESTURE DASH\r\n");
-        usb_serial_flush();
-
         msg_write(&msg_b, DASH);
         gst_read = 1;
         cooldown_delay = GESTURE_COOLDOWN_DELAY;
         gesture_state = STATE_COOLDOWN;
-
-        snprintf(debug_buf, 256, "inp_len: %d\r\n", msg_b.inp_len);
-        usb_serial_print(debug_buf);
-        usb_serial_flush();
       }
       break;
 
     case GESTURE_SPACE:
       if (gesture_state == STATE_READY) {
-        usb_serial_print("\n@ GESTURE SPACE\r\n");
-        usb_serial_flush();
-
         msg_write(&msg_b, SPACE);
         gst_read = 1;
         cooldown_delay = GESTURE_COOLDOWN_DELAY;
@@ -180,14 +157,13 @@ static void position_task(void *arg) {
       // Handle sending the msg.
       // Should eventually put the device into some kind of a send state.
       if (gesture_state == STATE_READY) {
-        usb_serial_print("\n@ GESTURE SEND\r\n");
-        usb_serial_flush();
-
         msg_ready(&msg_b);
-        snprintf(debug_buf, 256, "Msg:%s | Inp:%s\r\n", msg_b.msg_buf,
-                 msg_b.inp_buf);
-        usb_serial_print(debug_buf);
-        usb_serial_flush();
+        if (DEBUG_MSG_BUILDER) {
+          snprintf(debug_buf, 256, "Msg:%s | Inp:%s\r\n", msg_b.msg_buf,
+                   msg_b.inp_buf);
+          usb_serial_print(debug_buf);
+          usb_serial_flush();
+        }
         msg_reset(&msg_b);
         gesture_state = STATE_COOLDOWN;
         gst_read = 1;
@@ -246,7 +222,7 @@ int main() {
   // stdio_init_all();
 
   // Uncomment this lines if you want to wait till the serial monitor is
-  // connected
+  // connected. Messes it up if using the tusb and usb_serial libraries?
   /*while (!stdio_usb_connected()){
       sleep_ms(10);
   }*/
@@ -266,7 +242,7 @@ int main() {
   // Init msg builder/buffer
   msg_init(&msg_b, _msg_buf, MSG_BUILDER_BUF_SIZE);
 
-  TaskHandle_t positionTask, hUSB, sensor = NULL;
+  TaskHandle_t gesture, hUSB, sensor = NULL;
 
   xTaskCreate(usbTask, "usb", 2048, NULL, 3, &hUSB);
 #if (configNUMBER_OF_CORES > 1)
@@ -275,13 +251,13 @@ int main() {
 
   // Create the tasks with xTaskCreate
   BaseType_t result = xTaskCreate(
-      position_task,      // (en) Task function
-      "position",         // (en) Name of the task
+      gesture_task,       // (en) Task function
+      "gesture",          // (en) Name of the task
       DEFAULT_STACK_SIZE, // (en) Size of the stack for this task (in words).
                           // Generally 1024 or 2048
       NULL,               // (en) Arguments of the task
       1,                  // (en) Priority of this task
-      &positionTask);     // (en) A handle to control the execution of this task
+      &gesture);          // (en) A handle to control the execution of this task
 
   if (result != pdPASS) {
     usb_serial_print("Positoin Task creation failed\n");
@@ -297,6 +273,6 @@ int main() {
   // Start the scheduler (never returns)
   vTaskStartScheduler();
 
-  // Never reach this line.
+  // Never reach this line. Sad.
   return 0;
 }

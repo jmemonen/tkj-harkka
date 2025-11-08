@@ -323,6 +323,11 @@ int msg_write(msg_builder_t *b, char c) {
     if (b->inp_len == 0) {
       return MORSO_NULL_INPUT;
     }
+
+    if (b->inp == MORSO_INVALID_INPUT) {
+        msg_reset_inp(b);
+        return MORSO_INVALID_INPUT;
+      }
     // Here the msg_max_len + 1 offsets the max len to account for the
     // space that always follows the last morse symbol.
     // So we need only 3 bytes to properly end the message.

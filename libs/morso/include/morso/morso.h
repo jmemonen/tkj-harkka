@@ -3,6 +3,10 @@
 #include <stdbool.h>
 #include <stddef.h>
 
+// TODO: Ensure the functions expect the "  \n\0" at the end!
+//       Now it might not be so...
+//       The message builder already follows proper protocol.
+
 // Would prefer to hide this in implementation, but needed
 // for the struct...
 #define _MORSO_MAX_SYMBOL_LEN 4
