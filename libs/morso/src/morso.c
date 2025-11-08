@@ -12,7 +12,7 @@
 #define MORSE_TREE_SIZE 29
 #define MAX_MORSE_SYMBOL_LEN 4
 #define MSG_RIGHT_PADDING 3
-#define END_OF_MSG " \n" // String literal already null terminated!
+#define END_OF_MSG " \n"
 
 // Symbols
 #define DOT '.'
