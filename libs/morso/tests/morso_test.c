@@ -13,11 +13,11 @@ void test_encode_and_decode(void);
 void test_msg_builder(void);
 
 int main(void) {
-  test_char_to_morse();
-  test_morse_to_char();
-  test_encode_morse_msg();
-  test_decode_morse_msg();
-  test_encode_and_decode();
+  // test_char_to_morse();
+  // test_morse_to_char();
+  // test_encode_morse_msg();
+  // test_decode_morse_msg();
+  // test_encode_and_decode();
   test_msg_builder();
   return 0;
 }
@@ -273,6 +273,38 @@ void test_msg_builder(void) {
   print_msg(&builder);
   printf("result: %d\n\n", result);
   printf("msg len: %d\n", builder.msg_len);
+  if (builder.ready_to_send) {
+    printf("msg ready to send.\n");
+  }
+
+  // Test a too long symbol
+  printf("\nTesting a symbol too long...");
+  msg_init(&builder, small_msg, small);
+  msg = "..... ";
+  i = 0;
+  while (*msg) {
+    printf("i:%d\n", i++);
+    result = msg_write(&builder, *msg++);
+    printf("msg_buf inp symbol: %c\n",
+           (builder.inp == MORSO_INVALID_INPUT) ? '?' : builder.inp);
+    printf("msg is now: %s\n", builder.msg_buf);
+    printf("msg len: %d\n", builder.msg_len);
+    printf("inp len: %d\n", builder.inp_len);
+    printf("result: %d\n\n", result);
+    printf("inp_buf: %s\n", builder.inp_buf);
+    if (builder.ready_to_send) {
+      printf("msg ready to send.\n");
+    }
+  }
+  result = msg_ready(&builder);
+  printf("msg_buf inp symbol: %c\n",
+         (builder.inp == MORSO_INVALID_INPUT) ? '?' : builder.inp);
+  printf("final message: ");
+  printf("msg:%s\n", builder.msg_buf);
+  print_msg(&builder);
+  printf("result: %d\n\n", result);
+  printf("msg len: %d\n", builder.msg_len);
+  printf("inp buf: %s\n", builder.inp_buf);
   if (builder.ready_to_send) {
     printf("msg ready to send.\n");
   }

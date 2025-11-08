@@ -7,6 +7,11 @@
 // for the struct...
 #define _MORSO_MAX_SYMBOL_LEN 4
 
+// Symbols
+#define DOT '.'
+#define DASH '-'
+#define SPACE ' '
+
 enum morso_status {
   MORSO_OK,
   MORSO_INVALID_INPUT,
@@ -22,7 +27,7 @@ typedef struct {
   char *msg_buf;
   size_t msg_max_len;
   size_t msg_len;
-  char inp_buf[_MORSO_MAX_SYMBOL_LEN];
+  char inp_buf[_MORSO_MAX_SYMBOL_LEN + 1];
   size_t inp_len;
   char inp;
   bool ready_to_send;

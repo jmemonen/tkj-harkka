@@ -20,7 +20,7 @@
 // Flags for toggling debug prints.
 #define DEBUG_IMU_VALUES 0
 #define DEBUG_GESTURE_STATE 1
-#define DEBUG_MSG_BUILDER 0
+#define DEBUG_MSG_BUILDER 1
 
 // Default stack size for the tasks. It can be reduced to 1024 if task is not
 // using lot of memory.
@@ -33,6 +33,7 @@
 
 static motion_data_t motion_data;
 static uint8_t gesture_state = STATE_COOLDOWN;
+static char _msg_buf[MSG_BUILDER_BUF_SIZE];
 static msg_builder_t msg_b;
 
 // Activates the TinyUSB library.
@@ -99,18 +100,19 @@ static void position_task(void *arg) {
 
     Gesture_t gst = detect_gesture(&motion_data);
     uint8_t gst_read = 0;
+    char c = (char)MORSO_INVALID_INPUT;
+    char debug_buf[256];
 
     // TODO: Is this a bit crude? Could just compare timestamps?
     if (cooldown_delay) {
-      if (gst == GESTURE_READY) {
-        --cooldown_delay;
-      }
+      --cooldown_delay;
       vTaskDelay(pdMS_TO_TICKS(5));
       continue;
     }
 
     switch (gst) {
-
+      // TODO: Redundancy in the cases, but that could be necessary
+      // later on if more specific actions are neede on different gestures?
     case GESTURE_READY:
       if (gesture_state == STATE_COOLDOWN) {
         gesture_state = STATE_READY;
@@ -119,19 +121,58 @@ static void position_task(void *arg) {
       break;
 
     case GESTURE_DOT:
-    case GESTURE_DASH:
       if (gesture_state == STATE_READY) {
-        gesture_state = STATE_COOLDOWN;
+        if (msg_b.inp_len >= 4) {
+          usb_serial_print("inp buffer full...\r\n");
+          usb_serial_flush();
+        }
+        usb_serial_print("\n@ GESTURE DOT\r\n");
+        usb_serial_flush();
+
+        if (msg_b.inp_len >= 4) {
+          usb_serial_print("  inp gets too long!");
+          usb_serial_flush();
+        }
+        msg_write(&msg_b, DOT);
         gst_read = 1;
         cooldown_delay = GESTURE_COOLDOWN_DELAY;
+        gesture_state = STATE_COOLDOWN;
+
+        snprintf(debug_buf, 256, "inp_len: %d\r\n", msg_b.inp_len);
+        usb_serial_print(debug_buf);
+        usb_serial_flush();
+      }
+      break;
+
+    case GESTURE_DASH:
+      if (gesture_state == STATE_READY) {
+        if (msg_b.inp_len >= 4) {
+          usb_serial_print("inp buffer full...\r\n");
+          usb_serial_flush();
+        }
+        usb_serial_print("\n@ GESTURE DASH\r\n");
+        usb_serial_flush();
+
+        msg_write(&msg_b, DASH);
+        gst_read = 1;
+        cooldown_delay = GESTURE_COOLDOWN_DELAY;
+        gesture_state = STATE_COOLDOWN;
+
+        snprintf(debug_buf, 256, "inp_len: %d\r\n", msg_b.inp_len);
+        usb_serial_print(debug_buf);
+        usb_serial_flush();
       }
       break;
 
     case GESTURE_SPACE:
       if (gesture_state == STATE_READY) {
-        gesture_state = STATE_COOLDOWN;
+        usb_serial_print("\n@ GESTURE SPACE\r\n");
+        usb_serial_flush();
+
+        msg_write(&msg_b, SPACE);
         gst_read = 1;
         cooldown_delay = GESTURE_COOLDOWN_DELAY;
+        gesture_state = STATE_COOLDOWN;
       }
       break;
 
@@ -139,6 +180,15 @@ static void position_task(void *arg) {
       // Handle sending the msg.
       // Should eventually put the device into some kind of a send state.
       if (gesture_state == STATE_READY) {
+        usb_serial_print("\n@ GESTURE SEND\r\n");
+        usb_serial_flush();
+
+        msg_ready(&msg_b);
+        snprintf(debug_buf, 256, "Msg:%s | Inp:%s\r\n", msg_b.msg_buf,
+                 msg_b.inp_buf);
+        usb_serial_print(debug_buf);
+        usb_serial_flush();
+        msg_reset(&msg_b);
         gesture_state = STATE_COOLDOWN;
         gst_read = 1;
         cooldown_delay = GESTURE_COOLDOWN_DELAY;
@@ -149,27 +199,42 @@ static void position_task(void *arg) {
       break;
     }
 
+    // DEBUG: Print gesture state.
     if (DEBUG_GESTURE_STATE && gst_read) {
       switch (gst) {
       case GESTURE_DOT:
         usb_serial_print("DOT\r\n");
+        usb_serial_flush();
         break;
       case GESTURE_DASH:
         usb_serial_print("DASH\r\n");
+        usb_serial_flush();
         break;
       case GESTURE_SPACE:
         usb_serial_print("SPACE\r\n");
+        usb_serial_flush();
         break;
       case GESTURE_READY:
         usb_serial_print("READY\r\n");
+        usb_serial_flush();
         break;
       case GESTURE_SEND:
         usb_serial_print("SEND MSG!\r\n");
+        usb_serial_flush();
         break;
       default:
         break;
       }
-      gst_read = 0;
+    }
+
+    // DEBUG: Print msg builder state.
+    if (DEBUG_MSG_BUILDER && gst_read) {
+      if (gst != GESTURE_READY) {
+        snprintf(debug_buf, 256, "Msg:%s | Inp:%s\r\n", msg_b.msg_buf,
+                 msg_b.inp_buf);
+        usb_serial_print(debug_buf);
+        usb_serial_flush();
+      }
     }
 
     usb_serial_flush();
@@ -199,8 +264,7 @@ int main() {
   }
 
   // Init msg builder/buffer
-  char msg_buf[MSG_BUILDER_BUF_SIZE];
-  msg_init(&msg_b, msg_buf, MSG_BUILDER_BUF_SIZE);
+  msg_init(&msg_b, _msg_buf, MSG_BUILDER_BUF_SIZE);
 
   TaskHandle_t positionTask, hUSB, sensor = NULL;
 
