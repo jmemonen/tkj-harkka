@@ -23,6 +23,7 @@ int main(void) {
 }
 
 void test_char_to_morse(void) {
+  printf("\nchar_to_morse ----------------------------------\n");
   for (char c = 'a'; c <= 'z'; c++) {
     const char *str = char_to_morse(c);
     if (str == NULL) {
@@ -52,6 +53,7 @@ void test_char_to_morse(void) {
 }
 
 void test_morse_to_char() {
+  printf("\nmorse_to_char ----------------------------------\n");
   printf("\ntest_morse_to_char\n");
   for (char c = 'A'; c <= 'Z'; c++) {
     const char *str = char_to_morse(c);
@@ -61,6 +63,7 @@ void test_morse_to_char() {
 }
 
 void test_encode_morse_msg(void) {
+  printf("\nencode_morse_msg ----------------------------------\n");
   const size_t BUF_SIZE = 128;
   char buf[BUF_SIZE];
 
@@ -112,6 +115,7 @@ void test_encode_morse_msg(void) {
 }
 
 void test_decode_morse_msg(void) {
+  printf("\ndecode_morse_msg ----------------------------------\n");
   size_t buf_size = 64;
   char buf[buf_size];
 
@@ -168,6 +172,7 @@ void test_decode_morse_msg(void) {
 }
 
 void test_encode_and_decode(void) {
+  printf("\nencode_and_decode ----------------------------------\n");
   printf("\nTesting back and forth encoding\n");
   char msg[13] = "aktivoitu ON";
   const size_t BUF_SIZE = 64;
@@ -206,9 +211,9 @@ static inline void print_msg(msg_builder_t *b) {
   printf("EOM\n");
 }
 
-// TODO: Edge cases not tested and stuff...
 // Works as intended so far, though.
 void test_msg_builder(void) {
+  printf("\nmsg_builder ----------------------------------\n");
   char msg_buf[128];
   msg_builder_t builder;
   msg_init(&builder, msg_buf, 128);

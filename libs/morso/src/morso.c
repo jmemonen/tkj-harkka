@@ -10,7 +10,6 @@
 #define TO_ASCII_DIFF 32
 #define TO_IDX_DIFF 65
 #define MORSE_TREE_SIZE 29
-#define MAX_MORSE_SYMBOL_LEN 4
 #define MSG_RIGHT_PADDING 3
 #define END_OF_MSG " \n"
 
@@ -22,12 +21,6 @@
 // Macros
 #define DOT_IDX(idx) ((2) * (idx)) + (1)
 #define DASH_IDX(idx) ((2) * (idx)) + (2)
-
-// A helper function to read the next morse symbol from a given string.
-// This increments the str pointer as a side effect!
-// (Basically a consuming verions of morse to char...)
-// TODO: Remove?
-// int get_morse_symbol(const char **str, char *buf, size_t buf_size);
 
 // TODO: Add support for numbers?
 static const char *const morse_lookup[CHAR_AMOUNT] = {
@@ -114,7 +107,7 @@ char morse_to_char(const char *str) {
   size_t len = 0;
   size_t idx = 0;
 
-  while (*str && len <= MAX_MORSE_SYMBOL_LEN) {
+  while (*str && len < _MORSO_MAX_SYMBOL_LEN) {
     if (*str != DOT && *str != DASH) {
       return (char)MORSO_INVALID_INPUT;
     }
@@ -207,7 +200,7 @@ int decode_morse_msg(const char *msg, char *buf, size_t buf_size) {
       return MORSO_BUF_OVERFLOW;
     }
 
-    if (len > MAX_MORSE_SYMBOL_LEN) {
+    if (len > _MORSO_MAX_SYMBOL_LEN) {
       return MORSO_INVALID_INPUT;
     }
 
@@ -268,6 +261,8 @@ int msg_reset_inp(msg_builder_t *b) {
   b->inp_buf[0] = '\0';
   b->inp_len = 0;
   b->inp = MORSO_INVALID_INPUT;
+
+  return MORSO_OK;
 }
 
 int msg_reset(msg_builder_t *b) {
@@ -277,9 +272,8 @@ int msg_reset(msg_builder_t *b) {
   b->msg_buf[0] = '\0';
   b->msg_len = 0;
   b->ready_to_send = false;
-  msg_reset_inp(b);
 
-  return MORSO_OK;
+  return msg_reset_inp(b);
 }
 
 int msg_init(msg_builder_t *b, char *msg_buf, size_t buf_size) {
@@ -299,9 +293,6 @@ int msg_init(msg_builder_t *b, char *msg_buf, size_t buf_size) {
   return MORSO_OK;
 }
 
-// TODO: Kind of a WIP...
-// It would kinda be easier to just store the msg as ASCII where every
-// symbol is a single char? Easy to encode that into morse when needed.
 int msg_write(msg_builder_t *b, char c) {
   if (!b) {
     return MORSO_NULL_INPUT;
@@ -313,7 +304,7 @@ int msg_write(msg_builder_t *b, char c) {
   }
 
   // Handle any buffer being full.
-  if (b->inp_len >= MAX_MORSE_SYMBOL_LEN || b->msg_len > b->msg_max_len) {
+  if (b->inp_len >= _MORSO_MAX_SYMBOL_LEN || b->msg_len > b->msg_max_len) {
     // Truncate the msg with '\0'.
     b->msg_buf[b->msg_len] = '\0'; // TODO: Add end of message sequence?
     // Reset inp_buf.
