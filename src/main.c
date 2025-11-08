@@ -15,6 +15,13 @@
 #include "tkjhat/sdk.h"
 #include "usbSerialDebug/helper.h"
 
+#include "morso/morso.h"
+
+// Flags for toggling debug prints.
+#define DEBUG_IMU_VALUES 0
+#define DEBUG_GESTURE_STATE 1
+#define DEBUG_MSG_BUILDER 0
+
 // Default stack size for the tasks. It can be reduced to 1024 if task is not
 // using lot of memory.
 #define DEFAULT_STACK_SIZE 2048
@@ -22,9 +29,11 @@
 #define MOTION_BUF_SIZE 128
 #define EXP_MOV_AVG_ALPHA 0.25
 #define GESTURE_COOLDOWN_DELAY 10
+#define MSG_BUILDER_BUF_SIZE 256
 
 static motion_data_t motion_data;
 static uint8_t gesture_state = STATE_COOLDOWN;
+static msg_builder_t msg_b;
 
 // Activates the TinyUSB library.
 static void usbTask(void *arg) {
@@ -62,9 +71,11 @@ static void sensorTask(void *arg) {
     }
 
     // ******* Prints for dev and debug ********
-    format_motion_csv(&motion_data, buf, MOTION_BUF_SIZE);
-    usb_serial_print(buf);
-    usb_serial_flush();
+    if (DEBUG_IMU_VALUES) {
+      format_motion_csv(&motion_data, buf, MOTION_BUF_SIZE);
+      usb_serial_print(buf);
+      usb_serial_flush();
+    }
 
     vTaskDelay(pdMS_TO_TICKS(5));
   }
@@ -87,10 +98,13 @@ static void position_task(void *arg) {
   for (;;) {
 
     Gesture_t gst = detect_gesture(&motion_data);
+    uint8_t gst_read = 0;
 
     // TODO: Is this a bit crude? Could just compare timestamps?
     if (cooldown_delay) {
-      --cooldown_delay;
+      if (gst == GESTURE_READY) {
+        --cooldown_delay;
+      }
       vTaskDelay(pdMS_TO_TICKS(5));
       continue;
     }
@@ -100,31 +114,34 @@ static void position_task(void *arg) {
     case GESTURE_READY:
       if (gesture_state == STATE_COOLDOWN) {
         gesture_state = STATE_READY;
-        // usb_serial_print("READY\r\n");
+        gst_read = 1;
       }
       break;
 
     case GESTURE_DOT:
-      if (gesture_state == STATE_READY) {
-        gesture_state = STATE_COOLDOWN;
-        usb_serial_print("DOT\r\n");
-        // cooldown_delay = GESTURE_COOLDOWN_DELAY;
-      }
-      break;
-
     case GESTURE_DASH:
       if (gesture_state == STATE_READY) {
         gesture_state = STATE_COOLDOWN;
-        usb_serial_print("DASH\r\n");
-        // cooldown_delay = GESTURE_COOLDOWN_DELAY;
+        gst_read = 1;
+        cooldown_delay = GESTURE_COOLDOWN_DELAY;
       }
       break;
 
     case GESTURE_SPACE:
       if (gesture_state == STATE_READY) {
         gesture_state = STATE_COOLDOWN;
-        usb_serial_print("SPACE\r\n");
-        // cooldown_delay = GESTURE_COOLDOWN_DELAY;
+        gst_read = 1;
+        cooldown_delay = GESTURE_COOLDOWN_DELAY;
+      }
+      break;
+
+    case GESTURE_SEND:
+      // Handle sending the msg.
+      // Should eventually put the device into some kind of a send state.
+      if (gesture_state == STATE_READY) {
+        gesture_state = STATE_COOLDOWN;
+        gst_read = 1;
+        cooldown_delay = GESTURE_COOLDOWN_DELAY;
       }
       break;
 
@@ -132,24 +149,30 @@ static void position_task(void *arg) {
       break;
     }
 
+    if (DEBUG_GESTURE_STATE && gst_read) {
+      switch (gst) {
+      case GESTURE_DOT:
+        usb_serial_print("DOT\r\n");
+        break;
+      case GESTURE_DASH:
+        usb_serial_print("DASH\r\n");
+        break;
+      case GESTURE_SPACE:
+        usb_serial_print("SPACE\r\n");
+        break;
+      case GESTURE_READY:
+        usb_serial_print("READY\r\n");
+        break;
+      case GESTURE_SEND:
+        usb_serial_print("SEND MSG!\r\n");
+        break;
+      default:
+        break;
+      }
+      gst_read = 0;
+    }
+
     usb_serial_flush();
-
-    // uint8_t new_position = get_position(&motion_data);
-    // if (new_position != position_state) {
-    //   position_state = new_position;
-    //   switch (position_state) {
-    //   case DOT_STATE:
-    //     usb_serial_print("New state: DOT\r\n");
-    //     break;
-    //   case DASH_STATE:
-    //     usb_serial_print("New state: DASH\r\n");
-    //     break;
-    //   case WHITESPACE_STATE:
-    //     usb_serial_print("New state: WHITESPACE\r\n");
-    //   }
-    //   usb_serial_flush();
-    // }
-
     vTaskDelay(pdMS_TO_TICKS(5));
   }
 }
@@ -174,6 +197,10 @@ int main() {
   } else {
     usb_serial_print("Failed to initialize ICM-42670P.\r\n");
   }
+
+  // Init msg builder/buffer
+  char msg_buf[MSG_BUILDER_BUF_SIZE];
+  msg_init(&msg_b, msg_buf, MSG_BUILDER_BUF_SIZE);
 
   TaskHandle_t positionTask, hUSB, sensor = NULL;
 

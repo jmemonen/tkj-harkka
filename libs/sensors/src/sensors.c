@@ -66,6 +66,9 @@ uint8_t get_position(const motion_data_t *data) {
   return DOT_STATE;
 }
 
+// TODO: Dang we should have just handled the hecking IMU readings as
+// multidimensional direction vectors and just check how far the vectors
+// land from defined gesture points... Would be cleaner...
 Gesture_t detect_gesture(const motion_data_t *data) {
   // TODO: make thresholds constants somewhere.
   float gyro_sum = ABS(data->gx) + ABS(data->gy) + ABS(data->gz);
@@ -74,8 +77,19 @@ Gesture_t detect_gesture(const motion_data_t *data) {
     return GESTURE_READY;
   }
 
-  if (data->az < 0.3 && data->gx > 150.0) {
+  // Up flick
+  if (data->az > 1.8 && data->gx < -180.0) {
+    return GESTURE_SEND;
+  }
+
+  // Down flick
+  if (data->az < 0.3 && data->gx > 130.0) {
     return GESTURE_SPACE;
+  }
+
+  // Left flick.
+  if (data->ax > 0.4 && data->gy + data->gz > 100) {
+    return GESTURE_DOT;
   }
 
   // Right flick.
@@ -83,9 +97,5 @@ Gesture_t detect_gesture(const motion_data_t *data) {
     return GESTURE_DASH;
   }
 
-  // Left flick.
-  if (data->ax > 0.5 && data->gy + data->gz > 100) {
-    return GESTURE_DOT;
-  }
   return GESTURE_NONE;
 }
