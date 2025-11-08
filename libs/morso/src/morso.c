@@ -11,7 +11,8 @@
 #define TO_IDX_DIFF 65
 #define MORSE_TREE_SIZE 29
 #define MAX_MORSE_SYMBOL_LEN 4
-#define MSG_RIGHT_PADDING 4 // Enough memory for '   \0' to end the message.
+#define MSG_RIGHT_PADDING 3
+#define END_OF_MSG " \n" // String literal already null terminated!
 
 // Symbols
 #define DOT '.'
@@ -25,6 +26,7 @@
 // A helper function to read the next morse symbol from a given string.
 // This increments the str pointer as a side effect!
 // (Basically a consuming verions of morse to char...)
+// TODO: Remove?
 // int get_morse_symbol(const char **str, char *buf, size_t buf_size);
 
 // TODO: Add support for numbers?
@@ -259,9 +261,42 @@ int decode_morse_msg(const char *msg, char *buf, size_t buf_size) {
   return MORSO_OK;
 }
 
-static inline void reset_inp_buf(msg_builder_t *b) {
+int msg_reset_inp(msg_builder_t *b) {
+  if (!b) {
+    return MORSO_NULL_INPUT;
+  }
   b->inp_buf[0] = '\0';
   b->inp_len = 0;
+  b->inp = MORSO_INVALID_INPUT;
+}
+
+int msg_reset(msg_builder_t *b) {
+  if (!b || !b->msg_buf) {
+    return MORSO_NULL_INPUT;
+  }
+  b->msg_buf[0] = '\0';
+  b->msg_len = 0;
+  b->ready_to_send = false;
+  msg_reset_inp(b);
+
+  return MORSO_OK;
+}
+
+int msg_init(msg_builder_t *b, char *msg_buf, size_t buf_size) {
+  if (!msg_buf) {
+    return MORSO_NULL_INPUT;
+  }
+  b->msg_buf = msg_buf;
+
+  int64_t max_len = buf_size - MSG_RIGHT_PADDING;
+  if (max_len <= 0) {
+    return MORSO_BUF_OVERFLOW;
+  }
+  b->msg_max_len = max_len;
+
+  msg_reset(b);
+
+  return MORSO_OK;
 }
 
 // TODO: Kind of a WIP...
@@ -272,13 +307,17 @@ int msg_write(msg_builder_t *b, char c) {
     return MORSO_NULL_INPUT;
   }
 
+  if (b->ready_to_send) {
+    // Don't write to a finalized msg.
+    return MORSO_MSG_READY;
+  }
+
   // Handle any buffer being full.
-  if (b->inp_len >= MAX_MORSE_SYMBOL_LEN ||
-      b->msg_len > b->msg_size - MSG_RIGHT_PADDING) {
+  if (b->inp_len >= MAX_MORSE_SYMBOL_LEN || b->msg_len > b->msg_max_len) {
     // Truncate the msg with '\0'.
-    b->msg[b->msg_len] = '\0';
+    b->msg_buf[b->msg_len] = '\0'; // TODO: Add end of message sequence?
     // Reset inp_buf.
-    reset_inp_buf(b);
+    msg_reset_inp(b);
     return MORSO_BUF_OVERFLOW;
   }
 
@@ -291,27 +330,53 @@ int msg_write(msg_builder_t *b, char c) {
     return MORSO_OK;
 
   case SPACE:
-    // No input
+    // No morse to input. Don't let the user directly handle spaces.
     if (b->inp_len == 0) {
       return MORSO_NULL_INPUT;
     }
-    if (b->msg_len + b->inp_len + 1 >= b->msg_size) {
+    // Here the msg_max_len + 1 offsets the max len to account for the
+    // space that always follows the last morse symbol.
+    // So we need only 3 bytes to properly end the message.
+    if (b->msg_len + b->inp_len + 1 > b->msg_max_len + 1) {
       // Not enough memory in the msg buffer.
-      b->msg[b->msg_len] = '\0';
-      reset_inp_buf(b);
+      b->msg_buf[b->msg_len] = '\0';
+      msg_reset_inp(b);
       return MORSO_BUF_OVERFLOW;
     }
     for (size_t idx = 0; idx < b->inp_len; idx++) {
-      b->msg[b->msg_len++] = b->inp_buf[idx];
+      b->msg_buf[b->msg_len++] = b->inp_buf[idx];
     }
-    b->msg[b->msg_len++] = ' ';
-    b->msg[b->msg_len] = '\0';
-    reset_inp_buf(b);
+    b->msg_buf[b->msg_len++] = ' ';
+    b->msg_buf[b->msg_len] = '\0';
+    msg_reset_inp(b);
     return MORSO_OK;
 
   default:
     // Reset the inp buffer and return an error code.
-    reset_inp_buf(b);
+    msg_reset_inp(b);
     return MORSO_INVALID_INPUT;
   }
+}
+
+int msg_ready(msg_builder_t *b) {
+  if (!b) {
+    return MORSO_NULL_INPUT;
+  }
+
+  // TODO: Might be a redundant check, if the write function
+  // already enforces proper message length.
+  if (b->msg_len > b->msg_max_len) {
+    return MORSO_BUF_OVERFLOW;
+  }
+
+  const char *eom = END_OF_MSG;
+  size_t debug_idx = 0;
+  while (*eom) {
+    printf("   @msg_ready, i:%d\n", debug_idx++);
+    b->msg_buf[b->msg_len++] = *eom++;
+  }
+  b->msg_buf[b->msg_len] = '\0';
+
+  b->ready_to_send = true;
+  return MORSO_OK;
 }

@@ -180,26 +180,61 @@ void test_encode_and_decode(void) {
   printf("Result code: %d. Should be 0.\n", res);
 }
 
+// Print a ready msg.
+static inline void print_msg(msg_builder_t *b) {
+  if (!b->ready_to_send) {
+    return;
+  }
+  char *p = b->msg_buf;
+  while (*p) {
+    switch (*p) {
+    case ' ':
+      printf("_");
+      break;
+    case '\n':
+      printf("/");
+      break;
+    default:
+      printf("%c", *p);
+      break;
+    }
+    p++;
+  }
+  printf("EOM\n");
+}
+
 // TODO: Edge cases not tested and stuff...
 // Works as intended so far, though.
 void test_msg_builder(void) {
   char msg_buf[128];
-  msg_builder_t builder = {
-      .msg = msg_buf,
-      .msg_size = 128,
-      .msg_len = 0,
-      .inp_len = 0,
-      .inp = MORSO_INVALID_INPUT,
-  };
-  char *msg = {"... --- ..-- ...   "};
+  msg_builder_t builder;
+  msg_init(&builder, msg_buf, 128);
+  int result = 0;
+
+  char *msg = {"... "};
+  size_t i = 0;
   while (*msg) {
+    printf("i:%d\n", i++);
+    result = msg_write(&builder, *msg++);
     printf("msg_buf inp symbol: %c\n",
            (builder.inp == MORSO_INVALID_INPUT) ? '?' : builder.inp);
-    printf("msg is now: %s\n", builder.msg);
-    int result = msg_write(&builder, *msg++);
+    printf("msg is now: %s\n", builder.msg_buf);
+    printf("msg len: %d\n", builder.msg_len);
     printf("result: %d\n\n", result);
+    if (builder.ready_to_send) {
+      printf("msg ready to send.\n");
+    }
   }
+
+  result = msg_ready(&builder);
   printf("msg_buf inp symbol: %c\n",
          (builder.inp == MORSO_INVALID_INPUT) ? '?' : builder.inp);
-  printf("msg is now: %s\n", builder.msg);
+  printf("final message: ");
+  printf("msg:%s\n", builder.msg_buf);
+  print_msg(&builder);
+  printf("result: %d\n\n", result);
+  printf("msg len: %d\n", builder.msg_len);
+  if (builder.ready_to_send) {
+    printf("msg ready to send.\n");
+  }
 }

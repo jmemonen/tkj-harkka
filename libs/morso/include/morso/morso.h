@@ -1,28 +1,48 @@
 #pragma once
 
+#include <stdbool.h>
 #include <stddef.h>
 
 enum morso_status {
   MORSO_OK,
   MORSO_INVALID_INPUT,
   MORSO_BUF_OVERFLOW,
-  MORSO_NULL_INPUT
+  MORSO_NULL_INPUT,
+  MORSO_MSG_READY
 };
 
 // morso_msg_t
 // A convenient message buffer for building morse code strings.
+// Helps enforce the protocol so only valid morse messages are built.
 typedef struct {
-  char *msg;
-  size_t msg_size;
+  char *msg_buf;
+  size_t msg_max_len;
   size_t msg_len;
-
-  char inp_buf[5]; //TODO: magic number...
+  char inp_buf[5]; // TODO: magic number...
   size_t inp_len;
   char inp;
+  bool ready_to_send;
 } msg_builder_t;
 
+// Initialize a message builder by setting the message buffer and it's size.
+// Size is calculated so that enough memory is reserved for the message ending "
+// \n\0"
+int msg_init(msg_builder_t *b, char *msg_buf, size_t buf_size);
+
 // Write a dot, dash or space to a msg_builder_t.
+// A dot or a dash is written to the input buffer.
+// A space writes the current input symbol into the msg buffer.
+// Finalize the msg with msg_ready!
 int msg_write(msg_builder_t *b, char c);
+
+// Reset the current symbol input.
+int msg_reset_inp(msg_builder_t *b);
+
+// Reset the whole message.
+int msg_reset(msg_builder_t *b);
+
+// Finalize the message and mark it ready to send.
+int msg_ready(msg_builder_t *b);
 
 // Encodes a alphabetic message as morse code into the given buffer.
 // So far supports only alphabetical ASCII strings with aA-zZ
