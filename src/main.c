@@ -1,3 +1,4 @@
+#include <pico/time.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
@@ -123,6 +124,7 @@ static void gesture_task(void *arg) {
       if (gesture_state == STATE_COOLDOWN) {
         gesture_state = STATE_READY;
         gst_read = 1;
+        rgb_led_write(0, 2, 0);
       }
       break;
 
@@ -132,6 +134,7 @@ static void gesture_task(void *arg) {
         gst_read = 1;
         cooldown_delay = GESTURE_COOLDOWN_DELAY;
         gesture_state = STATE_COOLDOWN;
+        rgb_led_write(0, 0, 2);
       }
       break;
 
@@ -141,6 +144,7 @@ static void gesture_task(void *arg) {
         gst_read = 1;
         cooldown_delay = GESTURE_COOLDOWN_DELAY;
         gesture_state = STATE_COOLDOWN;
+        rgb_led_write(0, 0, 2);
       }
       break;
 
@@ -150,6 +154,7 @@ static void gesture_task(void *arg) {
         gst_read = 1;
         cooldown_delay = GESTURE_COOLDOWN_DELAY;
         gesture_state = STATE_COOLDOWN;
+        rgb_led_write(0, 0, 2);
       }
       break;
 
@@ -168,6 +173,7 @@ static void gesture_task(void *arg) {
         gesture_state = STATE_COOLDOWN;
         gst_read = 1;
         cooldown_delay = GESTURE_COOLDOWN_DELAY;
+        rgb_led_write(0, 0, 2);
       }
       break;
 
@@ -238,6 +244,11 @@ int main() {
   } else {
     usb_serial_print("Failed to initialize ICM-42670P.\r\n");
   }
+
+  // Init the pretty colourful LED
+  init_rgb_led();
+  sleep_ms(500);
+  rgb_led_write(0, 0, 0);
 
   // Init msg builder/buffer
   msg_init(&msg_b, _msg_buf, MSG_BUILDER_BUF_SIZE);
