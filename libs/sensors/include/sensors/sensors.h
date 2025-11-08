@@ -27,7 +27,8 @@ typedef enum {
   GESTURE_READY,
   GESTURE_DOT,
   GESTURE_DASH,
-  GESTURE_SPACE
+  GESTURE_SPACE,
+  GESTURE_SEND,
 } Gesture_t;
 
 extern const char IMU_FIELD_NAMES[];
