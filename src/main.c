@@ -20,7 +20,7 @@
 
 // Flags for toggling debug prints.
 #define DEBUG_IMU_VALUES 0
-#define DEBUG_GESTURE_STATE 1
+#define DEBUG_GESTURE_STATE 0
 #define DEBUG_MSG_BUILDER 1
 
 // Default stack size for the tasks. It can be reduced to 1024 if task is not
