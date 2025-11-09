@@ -267,6 +267,7 @@ int msg_reset(msg_builder_t *b) {
   b->msg_buf[0] = '\0';
   b->msg_len = 0;
   b->ready_to_send = false;
+  b->word_boundary = false;
 
   return msg_reset_inp(b);
 }
@@ -316,18 +317,25 @@ int msg_write(msg_builder_t *b, char c) {
     b->inp_buf[b->inp_len++] = c;
     b->inp_buf[b->inp_len] = '\0';
     b->inp = morse_to_char(b->inp_buf);
+    b->word_boundary = false;
     return MORSO_OK;
 
   case SPACE:
-    // No morse to input. Don't let the user directly handle spaces.
     if (b->inp_len == 0) {
-      return MORSO_NULL_INPUT;
+      if (b->word_boundary) {
+        return MORSO_INVALID_INPUT; // Don't write extra spaces.
+      }
+      b->msg_buf[b->msg_len++] = SPACE; // Write a word boundary.
+      b->word_boundary = true;
+      return MORSO_OK;
     }
 
+    // Handle invalid morse symbol in input.
     if (b->inp == MORSO_INVALID_INPUT) {
-        msg_reset_inp(b);
-        return MORSO_INVALID_INPUT;
-      }
+      msg_reset_inp(b);
+      return MORSO_INVALID_INPUT;
+    }
+
     // Here the msg_max_len + 1 offsets the max len to account for the
     // space that always follows the last morse symbol.
     // So we need only 3 bytes to properly end the message.
@@ -364,6 +372,9 @@ int msg_ready(msg_builder_t *b) {
   }
 
   const char *eom = END_OF_MSG;
+  if (b->word_boundary) {
+    eom++; // Skip a space if a double space already exists.
+  }
   size_t debug_idx = 0;
   while (*eom) {
     // printf("   @msg_ready, i:%d\n", debug_idx++);

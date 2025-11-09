@@ -34,6 +34,7 @@ typedef struct {
   char inp_buf[_MORSO_MAX_SYMBOL_LEN + 1];
   size_t inp_len;
   char inp;
+  bool word_boundary;
   bool ready_to_send;
 } msg_builder_t;
 
