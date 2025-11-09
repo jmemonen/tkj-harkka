@@ -102,6 +102,7 @@ static void gesture_task(void *arg) {
     Gesture_t gst = detect_gesture(&motion_data);
     uint8_t gst_read = 0;
     char c = (char)MORSO_INVALID_INPUT;
+    const size_t DEBUG_BUF_SIZE = 256;
     char debug_buf[256];
 
     // TODO: Is this a bit crude? Could just compare timestamps?
@@ -159,16 +160,26 @@ static void gesture_task(void *arg) {
       break;
 
     case GESTURE_SEND:
-      // Handle sending the msg.
-      // Should eventually put the device into some kind of a send state.
+      // TODO: Should eventually put the device into some kind of a send state?
       if (gesture_state == STATE_READY) {
-        msg_ready(&msg_b);
+        int res = msg_ready(&msg_b);
+
         if (DEBUG_MSG_BUILDER) {
-          snprintf(debug_buf, 256, "Msg:%s | Inp:%s\r\n", msg_b.msg_buf,
-                   msg_b.inp_buf);
-          usb_serial_print(debug_buf);
+          if (res == MORSO_OK) {
+            snprintf(debug_buf, DEBUG_BUF_SIZE, "Sent msg: %s\r",
+                     msg_b.msg_buf);
+            usb_serial_print(debug_buf);
+            usb_serial_flush();
+            decode_morse_msg(msg_b.msg_buf, debug_buf, DEBUG_BUF_SIZE);
+            usb_serial_print(debug_buf);
+            usb_serial_flush();
+            usb_serial_print("\r\n");
+          } else {
+            usb_serial_print("Failed to send message");
+          }
           usb_serial_flush();
         }
+
         msg_reset(&msg_b);
         gesture_state = STATE_COOLDOWN;
         gst_read = 1;
@@ -212,8 +223,8 @@ static void gesture_task(void *arg) {
     // DEBUG: Print msg builder state.
     if (DEBUG_MSG_BUILDER && gst_read) {
       if (gst != GESTURE_READY) {
-        snprintf(debug_buf, 256, "Msg:%s | Inp:%s\r\n", msg_b.msg_buf,
-                 msg_b.inp_buf);
+        snprintf(debug_buf, DEBUG_BUF_SIZE, "Msg:%s | Inp:%s\r\n",
+                 msg_b.msg_buf, msg_b.inp_buf);
         usb_serial_print(debug_buf);
         usb_serial_flush();
       }
