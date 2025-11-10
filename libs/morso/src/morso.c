@@ -118,7 +118,7 @@ char morse_to_char(const char *str) {
   return morse_tree[idx];
 }
 
-// It is what it is.
+// It is what it is. Now uses the message builder thing.
 int encode_morse_msg(const char *msg, char *buf, size_t buf_size) {
   if (!msg || !buf) {
     return MORSO_NULL_INPUT;

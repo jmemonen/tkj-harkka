@@ -77,6 +77,7 @@ int msg_reset(msg_builder_t *b);
 int msg_ready(msg_builder_t *b);
 
 // Encodes a alphabetic message as morse code into the given buffer.
+// Uses the morso message builder to form protocol-compliant morse messages.
 // So far supports only alphabetical ASCII strings with aA-zZ
 // where words are separated by spaces eg. "my cool message".
 //
