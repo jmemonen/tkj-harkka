@@ -7,8 +7,8 @@
 #define ABS(x) (((x) < (0)) ? (-x) : (x))
 
 // Gesture thresholds
-#define READY_G_SUM 25.0
-#define READY_AZ 0.7
+#define READY_G_SUM 20.0f
+#define READY_AZ 0.7f
 #define READY_AY -0.3f
 #define SEND_AZ 1.8f
 #define SEND_GX -180.0f
