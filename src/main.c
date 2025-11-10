@@ -21,10 +21,11 @@
 #include "morso/morso.h"
 
 // *************** DEBUG **********************************
+// Set to 1 to print debug info of different components.
 #define DEBUG_IMU 0
 #define DEBUG_GESTURE_STATE 0
 #define DEBUG_MSG_BUILDER 0
-#define DEBUG_RX 1
+#define DEBUG_RX 0
 
 #define DEBUG_BUF_SIZE 256
 static char debug_buf[DEBUG_BUF_SIZE];
