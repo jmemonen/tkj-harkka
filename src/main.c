@@ -11,6 +11,7 @@
 #include <tusb.h>
 
 #include "class/cdc/cdc_device.h"
+#include "portable.h"
 #include "portmacro.h"
 #include "projdefs.h"
 #include "sensors/sensors.h"
@@ -21,8 +22,8 @@
 
 // *************** DEBUG **********************************
 #define DEBUG_IMU 0
-#define DEBUG_GESTURE_STATE 1
-#define DEBUG_MSG_BUILDER 1
+#define DEBUG_GESTURE_STATE 0
+#define DEBUG_MSG_BUILDER 0
 #define DEBUG_RX 1
 
 #define DEBUG_BUF_SIZE 256
@@ -30,8 +31,7 @@ static char debug_buf[DEBUG_BUF_SIZE];
 
 // *********** GLOBAL VARIABLES AND CONSTANTS *************
 
-#define DEFAULT_STACK_SIZE                                                     \
-  2048 // Could be reduced to 1024 if using less memory.
+#define DEFAULT_STACK_SIZE 2048 // Can be reduced to 1024 if using less memory.
 #define CDC_ITF_TX 1
 #define MOTION_BUF_SIZE 128
 #define EXP_MOV_AVG_ALPHA 0.25
@@ -43,7 +43,6 @@ static motion_data_t motion_data;
 
 // TX and RX buffers and such.
 static char _msg_buf[MSG_BUF_SIZE];
-static char rx_buf[MSG_BUF_SIZE];
 static msg_builder_t msg_b;
 
 // Device state
@@ -51,12 +50,20 @@ enum comms_state { STANDBY_STATE, RX_STATE };
 static uint8_t dev_comms_state = STANDBY_STATE;
 static uint8_t gesture_state = STATE_COOLDOWN;
 
+// RX queue for handling received messages.
+// Needs some stuff to keep memory allocations static.
+#define QUEUE_SIZE 3
+static QueueHandle_t rx_queue;
+// static uint8_t _rx_queue_storage_buf[MSG_BUF_SIZE * QUEUE_SIZE];
+// static StaticQueue_t *_rx_queue_buf;
+
 // *********** Function prototypes ************************
 
 void send_msg(void);
 void debug_print_tx(int res);
 void debug_print_msg_builder(int gst);
 void debug_print_gst_state(int gst);
+QueueHandle_t init_rx_queue(void);
 
 // *********** FREERTOS TASKS  ****************************
 
@@ -97,7 +104,6 @@ static void sensorTask(void *arg) {
       continue;
     }
 
-    // ******* Prints for dev and debug ********
     if (DEBUG_IMU) {
       format_motion_csv(&motion_data, buf, MOTION_BUF_SIZE);
       usb_serial_print(buf);
@@ -231,7 +237,8 @@ static void gesture_task(void *arg) {
 // We just define it here and the tud_task handles the rest, I guess.
 // This is pretty much straight outta the example.
 void tud_cdc_rx_cb(uint8_t itf) {
-  dev_comms_state = RX_STATE;
+  static char rx_buf[MSG_BUF_SIZE];
+  static size_t rx_len;
 
   // allocate buffer for the data in the stack
   uint8_t buf[CFG_TUD_CDC_RX_BUFSIZE + 1];
@@ -242,36 +249,80 @@ void tud_cdc_rx_cb(uint8_t itf) {
   // | next time this function is called
 
   uint32_t count = tud_cdc_n_read(itf, buf, sizeof(buf));
+  buf[count] = '\0';
 
-  // check if the data was received on the second cdc interface
-  if (itf == 1) {
-    // process the received data
-    buf[count] = '\n';
-    buf[count + 1] = 0; // null-terminate the string
-    // now echo data back to the console on CDC 0
-
-    if (DEBUG_RX) {
-      usb_serial_print("\r\nReceived on CDC 1:");
-      usb_serial_print((char *)buf);
-      usb_serial_flush();
-    }
-
-    // and echo back OK on CDC 1
-    // tud_cdc_n_write(itf, (uint8_t const *)"OK\n", 3);
-    // tud_cdc_n_write_flush(itf);
+  // Don't process if received on the second cdc interface.
+  if (itf != 1) {
+    return;
   }
 
-  dev_comms_state = STANDBY_STATE;
+  bool eom = false;
+  for (size_t idx = 0; idx < count; idx++) {
+    if (rx_len == MSG_BUF_SIZE - 1) {
+      rx_buf[rx_len] = '\0'; // Truncate
+      continue;
+    }
+    if (rx_len >= MSG_BUF_SIZE) {
+      continue; // Discard overflow until end of message.
+    }
+    rx_buf[rx_len++] = buf[idx];
+    if (buf[idx] == '\n') {
+      eom = true;
+      rx_buf[rx_len++] = '\0';
+    }
+  }
+
+  if (DEBUG_RX) {
+    usb_serial_print("\r\nReceived on CDC 1:");
+    usb_serial_print((char *)buf);
+    usb_serial_print("\r\nrx_buf: ");
+    usb_serial_print(rx_buf);
+    usb_serial_flush();
+  }
+
+  // Unifinished message. Process no further.
+  if (!eom) {
+    return;
+  }
+
+  // Push finished msg to the queue if there's room.
+  if (uxQueueSpacesAvailable(rx_queue)) {
+    // Expecting only human input so the allocations shouldn't get out of hands.
+    // They are also limited by the memory available in the queue.
+    char *msg_ptr = pvPortMalloc(rx_len);
+    if (msg_ptr) {
+      memcpy(msg_ptr, rx_buf, rx_len);
+      xQueueSendToBack(rx_queue, msg_ptr, 5);
+      tud_cdc_n_write(itf, (uint8_t const *)"Message received!\n", 19);
+    } else { // We give up!
+      tud_cdc_n_write(itf, (uint8_t const *)"Error receiving message\n", 25);
+      if (DEBUG_RX) {
+        usb_serial_print("Couldn't allocate memory for received message!\n");
+      }
+    }
+    tud_cdc_n_write_flush(itf);
+    usb_serial_flush();
+  }
+
+  // Done. Reset buffer.
+  rx_buf[0] = '\0';
+  rx_len = 0;
 }
+
+// ************* HELPER FUNCTIONS ******************
 
 void send_msg(void) {
   static const size_t EOM = 3;
-  snprintf(debug_buf, DEBUG_BUF_SIZE, "Msg len: %d\r\n", msg_b.msg_len);
-  usb_serial_print(debug_buf);
   if (msg_b.msg_len > EOM) { // Don't send empties.
     tud_cdc_n_write(CDC_ITF_TX, (uint8_t const *)msg_b.msg_buf, msg_b.msg_len);
     tud_cdc_n_write_flush(CDC_ITF_TX);
   }
+}
+
+QueueHandle_t init_rx_queue(void) {
+  // Dynamic allocations, but that's how the settings were.
+  // Gets freed when you pull the plug...
+  return rx_queue = xQueueCreate(QUEUE_SIZE, sizeof(char *));
 }
 
 // ****************** DEBUGGING UTILITIES **********
@@ -354,10 +405,13 @@ int main() {
   sleep_ms(500);
   rgb_led_write(0, 0, 0);
 
-  // Init msg builder/buffer
+  // Initializations for data structures.
   msg_init(&msg_b, _msg_buf, MSG_BUF_SIZE);
+  if (!init_rx_queue()) {
+    usb_serial_print("Failed to initieate RX Queue.");
+  }
 
-  TaskHandle_t gesture, hUSB, sensor = NULL;
+  TaskHandle_t gesture, hUSB, sensor, rx = NULL;
 
   xTaskCreate(usbTask, "usb", 2048, NULL, 3, &hUSB);
 #if (configNUMBER_OF_CORES > 1)
@@ -375,7 +429,7 @@ int main() {
       &gesture);          // (en) A handle to control the execution of this task
 
   if (result != pdPASS) {
-    usb_serial_print("Positoin Task creation failed\n");
+    usb_serial_print("Position Task creation failed\n");
     return 0;
   }
 
