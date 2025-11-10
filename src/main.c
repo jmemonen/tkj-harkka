@@ -10,6 +10,7 @@
 #include <task.h>
 #include <tusb.h>
 
+#include "class/cdc/cdc_device.h"
 #include "portmacro.h"
 #include "projdefs.h"
 #include "sensors/sensors.h"
@@ -36,6 +37,8 @@ static motion_data_t motion_data;
 static uint8_t gesture_state = STATE_COOLDOWN;
 static char _msg_buf[MSG_BUILDER_BUF_SIZE];
 static msg_builder_t msg_b;
+
+void send_msg(void);
 
 // Activates the TinyUSB library.
 static void usbTask(void *arg) {
@@ -180,6 +183,8 @@ static void gesture_task(void *arg) {
           usb_serial_flush();
         }
 
+        send_msg();
+
         msg_reset(&msg_b);
         gesture_state = STATE_COOLDOWN;
         gst_read = 1;
@@ -232,6 +237,13 @@ static void gesture_task(void *arg) {
 
     usb_serial_flush();
     vTaskDelay(pdMS_TO_TICKS(5));
+  }
+}
+
+void send_msg(void) {
+  if (msg_b.msg_len) { // Don't send empties.
+    tud_cdc_n_write(CDC_ITF_TX, (uint8_t const *)msg_b.msg_buf, msg_b.msg_len);
+    tud_cdc_n_write_flush(CDC_ITF_TX);
   }
 }
 
