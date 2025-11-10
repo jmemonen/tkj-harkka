@@ -63,6 +63,7 @@ void send_msg(void);
 void debug_print_tx(int res);
 void debug_print_msg_builder(int gst);
 void debug_print_gst_state(int gst);
+void debug_print_rx(uint8_t *buf, char *rx_buf);
 QueueHandle_t init_rx_queue(void);
 
 // *********** FREERTOS TASKS  ****************************
@@ -273,11 +274,7 @@ void tud_cdc_rx_cb(uint8_t itf) {
   }
 
   if (DEBUG_RX) {
-    usb_serial_print("\r\nReceived on CDC 1:");
-    usb_serial_print((char *)buf);
-    usb_serial_print("\r\nrx_buf: ");
-    usb_serial_print(rx_buf);
-    usb_serial_flush();
+    debug_print_rx(buf, rx_buf);
   }
 
   // Unifinished message. Process no further.
@@ -377,6 +374,15 @@ void debug_print_gst_state(int gst) {
   usb_serial_flush();
 }
 
+void debug_print_rx(uint8_t *buf, char *rx_buf) {
+    usb_serial_print("\r\nReceived on CDC 1:");
+    usb_serial_print((char *)buf);
+    usb_serial_print("\r\nrx_buf: ");
+    usb_serial_print(rx_buf);
+    usb_serial_flush();
+
+}
+
 // *********************** MAIN ********************
 
 int main() {
@@ -428,13 +434,23 @@ int main() {
       1,                  // (en) Priority of this task
       &gesture);          // (en) A handle to control the execution of this task
 
+  // TODO: Clean these away into a function...
   if (result != pdPASS) {
     usb_serial_print("Position Task creation failed\n");
     return 0;
   }
 
-  result =
-      xTaskCreate(sensorTask, "sensor", DEFAULT_STACK_SIZE, NULL, 2, &sensor);
+  if (xTaskCreate(sensorTask, "sensor", DEFAULT_STACK_SIZE, NULL, 2, &sensor) !=
+      pdPASS) {
+    usb_serial_print("Sensor Task creation failed\n");
+    return 0;
+  }
+
+  if (xTaskCreate(sensorTask, "rx", DEFAULT_STACK_SIZE, NULL, 2, &rx) !=
+      pdPASS) {
+    usb_serial_print("RX Task creation failed\n");
+    return 0;
+  }
 
   // These have to be right before the scheduler.
   tusb_init();
