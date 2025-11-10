@@ -46,7 +46,7 @@ static char _msg_buf[MSG_BUF_SIZE];
 static msg_builder_t msg_b;
 
 // Device state
-enum comms_state { STANDBY_STATE, RX_STATE };
+enum comms_state { STANDBY_STATE, RX_DISPLAY_STATE };
 static uint8_t dev_comms_state = STANDBY_STATE;
 static uint8_t gesture_state = STATE_COOLDOWN;
 
@@ -60,9 +60,13 @@ static QueueHandle_t rx_queue;
 // *********** Function prototypes ************************
 
 void send_msg(void);
+void display_msg(const char *msg);
 void debug_print_tx(int res);
 void debug_print_msg_builder(int gst);
 void debug_print_gst_state(int gst);
+void debug_print_rx(uint8_t *buf, char *rx_buf);
+void debug_print_rx_task(const char *msg);
+void push_to_rx_queue(uint8_t itf, const char *msg, size_t msg_len);
 QueueHandle_t init_rx_queue(void);
 
 // *********** FREERTOS TASKS  ****************************
@@ -132,7 +136,7 @@ static void gesture_task(void *arg) {
 
     // We'll eventually display received messages somehow.
     // This stops gesture input while displaying.
-    if (dev_comms_state == RX_STATE) {
+    if (dev_comms_state == RX_DISPLAY_STATE) {
       vTaskDelay(pdMS_TO_TICKS(5));
       continue;
     }
@@ -199,7 +203,7 @@ static void gesture_task(void *arg) {
 
     case GESTURE_SEND:
       // TODO: Should eventually put the device into some kind of a send state?
-      // Do we need a state for it?
+      //       Do we need a state for it?
       if (gesture_state == STATE_READY) {
         gst_read = 1;
         int res = msg_ready(&msg_b);
@@ -231,6 +235,46 @@ static void gesture_task(void *arg) {
   }
 }
 
+// TODO: Could be renamed?
+//       The cdc callback handles most of the actual receiving
+//       and this is more of a message consumer for displaying.
+static void rx_task(void *arg) {
+  (void)arg;
+
+  while (!tud_mounted() || !tud_cdc_n_connected(1)) {
+    vTaskDelay(pdMS_TO_TICKS(50));
+  }
+
+  if (DEBUG_RX && usb_serial_connected()) {
+    usb_serial_print("RX Task started...\r\n");
+    usb_serial_flush();
+  }
+
+  for (;;) {
+    char *msg;
+
+    // Waits for messages. No blocking.
+    if (xQueueReceive(rx_queue, &msg, 0) == pdTRUE) {
+      if (!msg) {
+        // Somebody, put something, somebody put something in my queue.
+        continue;
+      }
+
+      if (DEBUG_RX) {
+        debug_print_rx_task(msg);
+      }
+
+      // Process the message. Use the display and go beep beep.
+      // REMEMBER THAT THE I2C CAN BE USED BY A SINGLE DEVICE AT A TIME.
+      // Use the display state for that?
+      dev_comms_state = RX_DISPLAY_STATE;
+      display_msg(msg); // TODO: Implement this!
+      vPortFree(msg);   // Free the heap allocated memory after done.
+      dev_comms_state = STANDBY_STATE; // Back to business as usual.
+    }
+  }
+}
+
 // ************************ CALLBACKS *************************************''
 
 // The TinuUSB library declares the callback function without defining?
@@ -241,22 +285,22 @@ void tud_cdc_rx_cb(uint8_t itf) {
   static size_t rx_len;
 
   // allocate buffer for the data in the stack
-  uint8_t buf[CFG_TUD_CDC_RX_BUFSIZE + 1];
+  uint8_t read_buf[CFG_TUD_CDC_RX_BUFSIZE + 1];
 
   // read the available data
   // | IMPORTANT: also do this for CDC0 because otherwise
   // | you won't be able to print anymore to CDC0
   // | next time this function is called
 
-  uint32_t count = tud_cdc_n_read(itf, buf, sizeof(buf));
-  buf[count] = '\0';
+  uint32_t count = tud_cdc_n_read(itf, read_buf, sizeof(read_buf));
+  read_buf[count] = '\0';
 
   // Don't process if received on the second cdc interface.
   if (itf != 1) {
     return;
   }
 
-  bool eom = false;
+  bool end_of_msg = false;
   for (size_t idx = 0; idx < count; idx++) {
     if (rx_len == MSG_BUF_SIZE - 1) {
       rx_buf[rx_len] = '\0'; // Truncate
@@ -265,34 +309,76 @@ void tud_cdc_rx_cb(uint8_t itf) {
     if (rx_len >= MSG_BUF_SIZE) {
       continue; // Discard overflow until end of message.
     }
-    rx_buf[rx_len++] = buf[idx];
-    if (buf[idx] == '\n') {
-      eom = true;
+    rx_buf[rx_len++] = read_buf[idx];
+    if (read_buf[idx] == '\n') {
+      end_of_msg = true;
       rx_buf[rx_len++] = '\0';
     }
   }
 
   if (DEBUG_RX) {
-    usb_serial_print("\r\nReceived on CDC 1:");
-    usb_serial_print((char *)buf);
-    usb_serial_print("\r\nrx_buf: ");
-    usb_serial_print(rx_buf);
-    usb_serial_flush();
+    debug_print_rx(read_buf, rx_buf);
   }
 
   // Unifinished message. Process no further.
-  if (!eom) {
+  if (!end_of_msg) {
     return;
   }
 
-  // Push finished msg to the queue if there's room.
+  // Push to the queue and let the pipeline handle the rest.
+  push_to_rx_queue(itf, rx_buf, rx_len);
+
+  // Done. Reset buffer.
+  rx_buf[0] = '\0';
+  rx_len = 0;
+}
+
+// ************* HELPER FUNCTIONS ******************
+
+// Sends the current message to the serial-client if it's ready.
+void send_msg(void) {
+  static const size_t EOM = 3;
+  if (msg_b.msg_len > EOM) { // Don't send empties.
+    tud_cdc_n_write(CDC_ITF_TX, (uint8_t const *)msg_b.msg_buf, msg_b.msg_len);
+    tud_cdc_n_write_flush(CDC_ITF_TX);
+  }
+}
+
+// Could actually do more than just display it e.g. buzz the buzzer.
+// Could be renamed more relevantly in that case.
+void display_msg(const char *msg) {
+
+  // ===== Your code goes here! ========
+  usb_serial_print("Seasons greetings from display_msg!");
+  // ===================================
+}
+
+QueueHandle_t init_rx_queue(void) {
+  // Dynamic allocations, but that's how the settings were.
+  // Gets freed when you pull the plug...
+  return rx_queue = xQueueCreate(QUEUE_SIZE, sizeof(char *));
+}
+
+// Push the message to the rx_queue for further processing.
+// Sends an ack to the sender (which should be a separate thing tbh).
+void push_to_rx_queue(uint8_t itf, const char *msg, size_t msg_len) {
   if (uxQueueSpacesAvailable(rx_queue)) {
     // Expecting only human input so the allocations shouldn't get out of hands.
     // They are also limited by the memory available in the queue.
-    char *msg_ptr = pvPortMalloc(rx_len);
+    char *msg_ptr = pvPortMalloc(msg_len * sizeof(char));
     if (msg_ptr) {
-      memcpy(msg_ptr, rx_buf, rx_len);
-      xQueueSendToBack(rx_queue, msg_ptr, 5);
+      memcpy(msg_ptr, msg, msg_len);
+      // This is apparently sending from an interruption, so needs
+      // extra shenanigans here as per FreeRTOS documentation.
+      BaseType_t xHigherPriorityTaskAwoken = pdFALSE;
+      xQueueSendToBackFromISR(rx_queue, &msg_ptr, &xHigherPriorityTaskAwoken);
+      if (xHigherPriorityTaskAwoken) {
+        portYIELD_FROM_ISR(xHigherPriorityTaskAwoken);
+      }
+      if (DEBUG_RX) {
+        usb_serial_print("Sent to queue:\r\n");
+        usb_serial_print(msg_ptr);
+      }
       tud_cdc_n_write(itf, (uint8_t const *)"Message received!\n", 19);
     } else { // We give up!
       tud_cdc_n_write(itf, (uint8_t const *)"Error receiving message\n", 25);
@@ -303,29 +389,10 @@ void tud_cdc_rx_cb(uint8_t itf) {
     tud_cdc_n_write_flush(itf);
     usb_serial_flush();
   }
-
-  // Done. Reset buffer.
-  rx_buf[0] = '\0';
-  rx_len = 0;
-}
-
-// ************* HELPER FUNCTIONS ******************
-
-void send_msg(void) {
-  static const size_t EOM = 3;
-  if (msg_b.msg_len > EOM) { // Don't send empties.
-    tud_cdc_n_write(CDC_ITF_TX, (uint8_t const *)msg_b.msg_buf, msg_b.msg_len);
-    tud_cdc_n_write_flush(CDC_ITF_TX);
-  }
-}
-
-QueueHandle_t init_rx_queue(void) {
-  // Dynamic allocations, but that's how the settings were.
-  // Gets freed when you pull the plug...
-  return rx_queue = xQueueCreate(QUEUE_SIZE, sizeof(char *));
 }
 
 // ****************** DEBUGGING UTILITIES **********
+// Extracted from the task handlers to keep them clean.
 
 void debug_print_tx(int res) {
   if (res == MORSO_OK) {
@@ -374,6 +441,21 @@ void debug_print_gst_state(int gst) {
     break;
   }
   usb_serial_print(s);
+  usb_serial_flush();
+}
+
+void debug_print_rx(uint8_t *buf, char *rx_buf) {
+  usb_serial_print("\r\nReceived on CDC 1:");
+  usb_serial_print((char *)buf);
+  usb_serial_print("\r\nrx_buf: ");
+  usb_serial_print(rx_buf);
+  usb_serial_flush();
+}
+
+void debug_print_rx_task(const char *msg) {
+  usb_serial_print("RX Task processing a msg: ");
+  usb_serial_print(msg);
+  usb_serial_print("\r\n");
   usb_serial_flush();
 }
 
@@ -428,13 +510,22 @@ int main() {
       1,                  // (en) Priority of this task
       &gesture);          // (en) A handle to control the execution of this task
 
+  // TODO: Clean these away into a function...
   if (result != pdPASS) {
     usb_serial_print("Position Task creation failed\n");
     return 0;
   }
 
-  result =
-      xTaskCreate(sensorTask, "sensor", DEFAULT_STACK_SIZE, NULL, 2, &sensor);
+  if (xTaskCreate(sensorTask, "sensor", DEFAULT_STACK_SIZE, NULL, 2, &sensor) !=
+      pdPASS) {
+    usb_serial_print("Sensor Task creation failed\n");
+    return 0;
+  }
+
+  if (xTaskCreate(rx_task, "rx", DEFAULT_STACK_SIZE, NULL, 2, &rx) != pdPASS) {
+    usb_serial_print("RX Task creation failed\n");
+    return 0;
+  }
 
   // These have to be right before the scheduler.
   tusb_init();
