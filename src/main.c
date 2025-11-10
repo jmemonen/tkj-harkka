@@ -19,26 +19,46 @@
 
 #include "morso/morso.h"
 
-// Flags for toggling debug prints.
-#define DEBUG_IMU_VALUES 0
-#define DEBUG_GESTURE_STATE 0
+// *************** DEBUG **********************************
+#define DEBUG_IMU 0
+#define DEBUG_GESTURE_STATE 1
 #define DEBUG_MSG_BUILDER 1
+#define DEBUG_RX 1
 
-// Default stack size for the tasks. It can be reduced to 1024 if task is not
-// using lot of memory.
-#define DEFAULT_STACK_SIZE 2048
+#define DEBUG_BUF_SIZE 256
+static char debug_buf[DEBUG_BUF_SIZE];
+
+// *********** GLOBAL VARIABLES AND CONSTANTS *************
+
+#define DEFAULT_STACK_SIZE                                                     \
+  2048 // Could be reduced to 1024 if using less memory.
 #define CDC_ITF_TX 1
 #define MOTION_BUF_SIZE 128
 #define EXP_MOV_AVG_ALPHA 0.25
-#define GESTURE_COOLDOWN_DELAY 10
-#define MSG_BUILDER_BUF_SIZE 256
+#define GESTURE_COOLDOWN_DELAY 5
+#define MSG_BUF_SIZE 256
 
+// Sensor data
 static motion_data_t motion_data;
-static uint8_t gesture_state = STATE_COOLDOWN;
-static char _msg_buf[MSG_BUILDER_BUF_SIZE];
+
+// TX and RX buffers and such.
+static char _msg_buf[MSG_BUF_SIZE];
+static char rx_buf[MSG_BUF_SIZE];
 static msg_builder_t msg_b;
 
+// Device state
+enum comms_state { STANDBY_STATE, RX_STATE };
+static uint8_t dev_comms_state = STANDBY_STATE;
+static uint8_t gesture_state = STATE_COOLDOWN;
+
+// *********** Function prototypes ************************
+
 void send_msg(void);
+void debug_print_tx(int res);
+void debug_print_msg_builder(int gst);
+void debug_print_gst_state(int gst);
+
+// *********** FREERTOS TASKS  ****************************
 
 // Activates the TinyUSB library.
 static void usbTask(void *arg) {
@@ -58,17 +78,19 @@ static void sensorTask(void *arg) {
     vTaskDelay(pdMS_TO_TICKS(50));
   }
 
-  if (usb_serial_connected()) {
+  if (DEBUG_IMU && usb_serial_connected()) {
     usb_serial_print("sensorTask started...\r\n");
     usb_serial_flush();
   }
 
   motion_data.error = 0;
-  usb_serial_print(IMU_FIELD_NAMES);
+  if (DEBUG_IMU) {
+    usb_serial_print(IMU_FIELD_NAMES);
+  }
 
   while (1) {
     read_filtered_motion_data(&motion_data, EXP_MOV_AVG_ALPHA);
-    if (motion_data.error) {
+    if (DEBUG_IMU && motion_data.error) {
       usb_serial_print("There was an error reading motion data!\r\n");
       usb_serial_flush();
       motion_data.error = 0;
@@ -76,7 +98,7 @@ static void sensorTask(void *arg) {
     }
 
     // ******* Prints for dev and debug ********
-    if (DEBUG_IMU_VALUES) {
+    if (DEBUG_IMU) {
       format_motion_csv(&motion_data, buf, MOTION_BUF_SIZE);
       usb_serial_print(buf);
       usb_serial_flush();
@@ -93,8 +115,8 @@ static void gesture_task(void *arg) {
     vTaskDelay(pdMS_TO_TICKS(50));
   }
 
-  if (usb_serial_connected()) {
-    usb_serial_print("gesture started...\r\n");
+  if (DEBUG_GESTURE_STATE && usb_serial_connected()) {
+    usb_serial_print("gesture_task started...\r\n");
     usb_serial_flush();
   }
 
@@ -102,13 +124,20 @@ static void gesture_task(void *arg) {
 
   for (;;) {
 
+    // We'll eventually display received messages somehow.
+    // This stops gesture input while displaying.
+    if (dev_comms_state == RX_STATE) {
+      vTaskDelay(pdMS_TO_TICKS(5));
+      continue;
+    }
+
     Gesture_t gst = detect_gesture(&motion_data);
     uint8_t gst_read = 0;
     char c = (char)MORSO_INVALID_INPUT;
-    const size_t DEBUG_BUF_SIZE = 256;
-    char debug_buf[256];
 
     // TODO: Is this a bit crude? Could just compare timestamps?
+    // Then again, this could be used to accumulate extra cooldown
+    // for detecting prolonged shaking gestures?
     if (cooldown_delay) {
       // Cooldown only in neutral position.
       if (gst == GESTURE_READY) {
@@ -126,16 +155,16 @@ static void gesture_task(void *arg) {
       // gestures?
     case GESTURE_READY:
       if (gesture_state == STATE_COOLDOWN) {
-        gesture_state = STATE_READY;
         gst_read = 1;
+        gesture_state = STATE_READY;
         rgb_led_write(0, 2, 0);
       }
       break;
 
     case GESTURE_DOT:
       if (gesture_state == STATE_READY) {
-        msg_write(&msg_b, DOT);
         gst_read = 1;
+        msg_write(&msg_b, DOT);
         cooldown_delay = GESTURE_COOLDOWN_DELAY;
         gesture_state = STATE_COOLDOWN;
         rgb_led_write(0, 0, 2);
@@ -144,8 +173,8 @@ static void gesture_task(void *arg) {
 
     case GESTURE_DASH:
       if (gesture_state == STATE_READY) {
-        msg_write(&msg_b, DASH);
         gst_read = 1;
+        msg_write(&msg_b, DASH);
         cooldown_delay = GESTURE_COOLDOWN_DELAY;
         gesture_state = STATE_COOLDOWN;
         rgb_led_write(0, 0, 2);
@@ -154,8 +183,8 @@ static void gesture_task(void *arg) {
 
     case GESTURE_SPACE:
       if (gesture_state == STATE_READY) {
-        msg_write(&msg_b, SPACE);
         gst_read = 1;
+        msg_write(&msg_b, SPACE);
         cooldown_delay = GESTURE_COOLDOWN_DELAY;
         gesture_state = STATE_COOLDOWN;
         rgb_led_write(0, 0, 2);
@@ -164,30 +193,17 @@ static void gesture_task(void *arg) {
 
     case GESTURE_SEND:
       // TODO: Should eventually put the device into some kind of a send state?
+      // Do we need a state for it?
       if (gesture_state == STATE_READY) {
+        gst_read = 1;
         int res = msg_ready(&msg_b);
-
         if (DEBUG_MSG_BUILDER) {
-          if (res == MORSO_OK) {
-            snprintf(debug_buf, DEBUG_BUF_SIZE, "Sent msg: %s\r",
-                     msg_b.msg_buf);
-            usb_serial_print(debug_buf);
-            usb_serial_flush();
-            decode_morse_msg(msg_b.msg_buf, debug_buf, DEBUG_BUF_SIZE);
-            usb_serial_print(debug_buf);
-            usb_serial_flush();
-            usb_serial_print("\r\n");
-          } else {
-            usb_serial_print("Failed to send message");
-          }
-          usb_serial_flush();
+          debug_print_tx(res);
         }
 
         send_msg();
-
         msg_reset(&msg_b);
         gesture_state = STATE_COOLDOWN;
-        gst_read = 1;
         cooldown_delay = GESTURE_COOLDOWN_DELAY;
         rgb_led_write(0, 0, 2);
       }
@@ -197,42 +213,11 @@ static void gesture_task(void *arg) {
       break;
     }
 
-    // DEBUG: Print gesture state.
     if (DEBUG_GESTURE_STATE && gst_read) {
-      switch (gst) {
-      case GESTURE_DOT:
-        usb_serial_print("DOT\r\n");
-        usb_serial_flush();
-        break;
-      case GESTURE_DASH:
-        usb_serial_print("DASH\r\n");
-        usb_serial_flush();
-        break;
-      case GESTURE_SPACE:
-        usb_serial_print("SPACE\r\n");
-        usb_serial_flush();
-        break;
-      case GESTURE_READY:
-        usb_serial_print("READY\r\n");
-        usb_serial_flush();
-        break;
-      case GESTURE_SEND:
-        usb_serial_print("SEND MSG!\r\n");
-        usb_serial_flush();
-        break;
-      default:
-        break;
-      }
+      debug_print_gst_state(gst);
     }
-
-    // DEBUG: Print msg builder state.
     if (DEBUG_MSG_BUILDER && gst_read) {
-      if (gst != GESTURE_READY) {
-        snprintf(debug_buf, DEBUG_BUF_SIZE, "Msg:%s | Inp:%s\r\n",
-                 msg_b.msg_buf, msg_b.inp_buf);
-        usb_serial_print(debug_buf);
-        usb_serial_flush();
-      }
+      debug_print_msg_builder(gst);
     }
 
     usb_serial_flush();
@@ -240,12 +225,108 @@ static void gesture_task(void *arg) {
   }
 }
 
+// ************************ CALLBACKS *************************************''
+
+// The TinuUSB library declares the callback function without defining?
+// We just define it here and the tud_task handles the rest, I guess.
+// This is pretty much straight outta the example.
+void tud_cdc_rx_cb(uint8_t itf) {
+  dev_comms_state = RX_STATE;
+
+  // allocate buffer for the data in the stack
+  uint8_t buf[CFG_TUD_CDC_RX_BUFSIZE + 1];
+
+  // read the available data
+  // | IMPORTANT: also do this for CDC0 because otherwise
+  // | you won't be able to print anymore to CDC0
+  // | next time this function is called
+
+  uint32_t count = tud_cdc_n_read(itf, buf, sizeof(buf));
+
+  // check if the data was received on the second cdc interface
+  if (itf == 1) {
+    // process the received data
+    buf[count] = '\n';
+    buf[count + 1] = 0; // null-terminate the string
+    // now echo data back to the console on CDC 0
+
+    if (DEBUG_RX) {
+      usb_serial_print("\r\nReceived on CDC 1:");
+      usb_serial_print((char *)buf);
+      usb_serial_flush();
+    }
+
+    // and echo back OK on CDC 1
+    // tud_cdc_n_write(itf, (uint8_t const *)"OK\n", 3);
+    // tud_cdc_n_write_flush(itf);
+  }
+
+  dev_comms_state = STANDBY_STATE;
+}
+
 void send_msg(void) {
-  if (msg_b.msg_len) { // Don't send empties.
+  static const size_t EOM = 3;
+  snprintf(debug_buf, DEBUG_BUF_SIZE, "Msg len: %d\r\n", msg_b.msg_len);
+  usb_serial_print(debug_buf);
+  if (msg_b.msg_len > EOM) { // Don't send empties.
     tud_cdc_n_write(CDC_ITF_TX, (uint8_t const *)msg_b.msg_buf, msg_b.msg_len);
     tud_cdc_n_write_flush(CDC_ITF_TX);
   }
 }
+
+// ****************** DEBUGGING UTILITIES **********
+
+void debug_print_tx(int res) {
+  if (res == MORSO_OK) {
+    snprintf(debug_buf, DEBUG_BUF_SIZE, "Sent msg: %s\r", msg_b.msg_buf);
+    usb_serial_print(debug_buf);
+    usb_serial_flush();
+    decode_morse_msg(msg_b.msg_buf, debug_buf, DEBUG_BUF_SIZE);
+    usb_serial_print(debug_buf);
+    usb_serial_flush();
+    usb_serial_print("\r\n");
+  } else {
+    usb_serial_print("Failed to send message");
+  }
+  usb_serial_flush();
+}
+
+void debug_print_msg_builder(int gst) {
+  if (gst != GESTURE_READY) {
+    snprintf(debug_buf, DEBUG_BUF_SIZE, "Msg:%s | Inp:%s\r\n", msg_b.msg_buf,
+             msg_b.inp_buf);
+    usb_serial_print(debug_buf);
+    usb_serial_flush();
+  }
+}
+
+void debug_print_gst_state(int gst) {
+  char *s;
+  switch (gst) {
+  case GESTURE_DOT:
+    s = "DOT\r\n";
+    break;
+  case GESTURE_DASH:
+    s = "DASH\r\n";
+    break;
+  case GESTURE_SPACE:
+    s = "SPACE\r\n";
+    break;
+  case GESTURE_READY:
+    s = "READY\r\n";
+    break;
+  case GESTURE_SEND:
+    s = "SEND MSG\r\n";
+    break;
+  default:
+    s = "HUHHUH?\r\n";
+    break;
+  }
+  usb_serial_print(s);
+  usb_serial_flush();
+}
+
+// *********************** MAIN ********************
 
 int main() {
   // stdio_init_all();
@@ -274,7 +355,7 @@ int main() {
   rgb_led_write(0, 0, 0);
 
   // Init msg builder/buffer
-  msg_init(&msg_b, _msg_buf, MSG_BUILDER_BUF_SIZE);
+  msg_init(&msg_b, _msg_buf, MSG_BUF_SIZE);
 
   TaskHandle_t gesture, hUSB, sensor = NULL;
 
