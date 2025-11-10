@@ -118,58 +118,49 @@ char morse_to_char(const char *str) {
   return morse_tree[idx];
 }
 
-// It is what it is.
+// It is what it is. Now uses the message builder thing.
 int encode_morse_msg(const char *msg, char *buf, size_t buf_size) {
-  char *end = buf + buf_size - 1;
-  uint8_t needs_space = 0;
-
   if (!msg || !buf) {
-    *buf = '\0';
     return MORSO_NULL_INPUT;
   }
-  if (buf_size < 1) {
-    *buf = '\0';
-    return MORSO_BUF_OVERFLOW;
+
+  msg_builder_t b;
+
+  int res = msg_init(&b, buf, buf_size);
+  if (res != MORSO_OK) {
+    return res;
   }
 
   while (*msg) {
-    const char c = *msg++;
+    char c = *msg++;
 
-    if (buf > end) {
-      *buf = '\0';
-      return MORSO_BUF_OVERFLOW;
-    }
+    switch (c) {
 
-    // Handle space in input.
-    if (c == SPACE) {
-      *buf++ = SPACE;
-      continue;
-    }
-
-    // Space as a separator between symbols.
-    if (needs_space) {
-      *buf++ = SPACE;
-      needs_space = 0;
-    }
-
-    // Copy the corresponding morse symbol string to buf.
-    const char *morse = char_to_morse(c);
-    if (!morse) {
-      *buf = '\0';
-      return MORSO_INVALID_INPUT;
-    }
-    while (*morse) {
-      if (buf > end) {
-        *buf = '\0';
+    case SPACE:
+      if ((res = msg_write(&b, SPACE)) != MORSO_OK) {
         return MORSO_BUF_OVERFLOW;
       }
-      *buf++ = *morse++;
-    }
-    needs_space = 1;
-  }
-  *buf = '\0';
+      break;
 
-  return MORSO_OK;
+    default: {
+      const char *morse = char_to_morse(c);
+      if (!morse) {
+        return MORSO_INVALID_INPUT;
+      }
+      while (*morse) {
+        if ((res = msg_write(&b, *morse++)) != MORSO_OK) {
+          return res;
+        }
+      }
+      if ((res = msg_write(&b, SPACE)) != MORSO_OK) {
+        return res;
+      }
+      break;
+    }
+    }
+  }
+
+  return msg_ready(&b);
 }
 
 int decode_morse_msg(const char *msg, char *buf, size_t buf_size) {
@@ -323,7 +314,7 @@ int msg_write(msg_builder_t *b, char c) {
   case SPACE:
     if (b->inp_len == 0) {
       if (b->word_boundary) {
-        return MORSO_INVALID_INPUT; // Don't write extra spaces.
+        return MORSO_OK; // Don't write extra spaces.
       }
       b->msg_buf[b->msg_len++] = SPACE; // Write a word boundary.
       b->word_boundary = true;

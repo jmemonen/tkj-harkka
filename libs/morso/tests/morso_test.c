@@ -15,10 +15,10 @@ void test_msg_builder(void);
 int main(void) {
   // test_char_to_morse();
   // test_morse_to_char();
-  // test_encode_morse_msg();
+  test_encode_morse_msg();
   // test_decode_morse_msg();
-  // test_encode_and_decode();
-  test_msg_builder();
+  test_encode_and_decode();
+  // test_msg_builder();
   return 0;
 }
 
@@ -80,12 +80,12 @@ void test_encode_morse_msg(void) {
   printf("%s\n", buf);
   printf("return code %d. Should be 0\n", res);
 
-  // Edge case where \0 should come immediately after a symbol.
+  // Barely fits
   buf[0] = '\0';
-  char lil_buf[2];
+  char lil_buf[5];
   str = "e";
   printf("\nEncoding message: %s :\t", str);
-  res = encode_morse_msg(str, lil_buf, 2);
+  res = encode_morse_msg(str, lil_buf, 5);
   printf("%s\n", lil_buf);
   printf("return code %d. Should be 0\n", res);
 
