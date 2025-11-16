@@ -4,6 +4,7 @@ set (APP_NAME sensors)
 
 add_library(${APP_NAME} STATIC
   src/sensors.c
+  src/buzzer.c
 )
 
 target_include_directories(${APP_NAME}
@@ -15,6 +16,8 @@ target_include_directories(${APP_NAME}
 
 target_link_libraries(${APP_NAME}
   PUBLIC
+  FreeRTOS-Kernel
+  FreeRTOS-Kernel-Heap4
   TKJHAT_SDK
 )
 
