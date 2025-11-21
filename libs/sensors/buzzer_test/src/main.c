@@ -3,7 +3,7 @@
 #include <task.h>
 
 #include <tkjhat/sdk.h>
-#include <sensors/buzzer.h>
+#include <sensors/message_output.h>
 
 
 
