@@ -16,6 +16,7 @@
 #include "portable.h"
 #include "portmacro.h"
 #include "projdefs.h"
+#include "tkj_utils/melody.h"
 #include "tkj_utils/message_output.h"
 #include "tkj_utils/tkj_utils.h"
 #include "tkjhat/sdk.h"
@@ -265,6 +266,9 @@ static void output_task(void *arg) {
     usb_serial_print("Output Task started...\r\n");
     usb_serial_flush();
   }
+
+  play_melody(&the_lick, 120);
+
   char *msg;
 
   for (;;) {
@@ -276,7 +280,10 @@ static void output_task(void *arg) {
         usb_serial_print("\r\n");
         usb_serial_flush();
       }
-
+      char ascii[MSG_BUF_SIZE];
+      decode_morse_msg(msg, ascii, MSG_BUF_SIZE);
+      // THIS KILLS THE DEVICE.
+      // write_text_multirow(ascii); 
       buzzer_play_message(msg);
       if (DEBUG_BUZZER) {
         usb_serial_print("Buzzer done playing. Freed msg*\r\n");
