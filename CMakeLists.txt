@@ -88,6 +88,7 @@ add_subdirectory(libs/morso)
 # Uncomment the examples that you want to include in your project.
 #
 add_subdirectory(libs/tkj_utils/buzzer_test)
+add_subdirectory(libs/tkj_utils/display_test)
 #
 # add_subdirectory(examples/hello_blink)
 # add_subdirectory(examples/hello_blink_freertos)

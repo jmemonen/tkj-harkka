@@ -4,7 +4,7 @@ set (APP_NAME tkj_utils)
 
 add_library(${APP_NAME} STATIC
   src/tkj_utils.c
-  src/buzzer.c
+  src/message_output.c
 )
 
 target_include_directories(${APP_NAME}
