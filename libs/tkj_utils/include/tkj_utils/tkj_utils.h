@@ -6,8 +6,6 @@
 
 #define ABS(x) (((x) < (0)) ? (-x) : (x))
 
-enum position { DOT_STATE, DASH_STATE, WHITESPACE_STATE };
-
 typedef struct {
   float ax;
   float ay;
@@ -52,13 +50,6 @@ void format_motion_csv(const motion_data_t *data, char *buf, size_t buf_size);
 
 // Calculates the exponential moving average of two floats
 float exp_moving_avg(float current, float next, float alpha);
-
-// Calculates the current position state of the device.
-// Returns
-// 0 : Neutral position (dot)
-// 1 : Sideways position (dash)
-// 2 : Upwards position (whitespace)
-uint8_t get_position(const motion_data_t *data);
 
 // Evaluates the motion data values to detect gestures.
 // Returns a Gesture_t type:
