@@ -7,28 +7,34 @@
 
 
 
-// Buzzer task
-static void buzzer_task(void *arg) {
+// Display task
+static void display_task(void *arg) {
   (void)arg;
   
   char msg[] = "- . .-. ...- .  .--- .-  -.- .. .. - --- ...  -.- .- .-.. --- .. ... - .-   ";
+  // char msg[] = "... - .-   ";
+  // char viesti[] = "Terve ja kiitos kaloista!";
 
   for (;;) {
-    buzzer_play_message(msg);
-    vTaskDelay(pdMS_TO_TICKS(2000));
+    display_morse_message(msg);
+    vTaskDelay(pdMS_TO_TICKS(5000));
   }
 }
 
 int main() {
   stdio_init_all();
+  init_hat_sdk();
   init_buzzer();
+  init_display();
+
+  clear_display();
 
   sleep_ms(3000);
   
-  TaskHandle_t buzzerTask = NULL;
+  TaskHandle_t displayTask = NULL;
 
   BaseType_t result =
-      xTaskCreate(buzzer_task, "buzzer", 2048, NULL, 2, &buzzerTask);
+      xTaskCreate(display_task, "buzzer", 2048, NULL, 2, &displayTask);
 
   vTaskStartScheduler();
 

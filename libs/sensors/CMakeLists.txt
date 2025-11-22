@@ -4,7 +4,7 @@ set (APP_NAME sensors)
 
 add_library(${APP_NAME} STATIC
   src/sensors.c
-  src/buzzer.c
+  src/message_output.c
 )
 
 target_include_directories(${APP_NAME}
