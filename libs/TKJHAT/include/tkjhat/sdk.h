@@ -638,6 +638,11 @@ void write_text(const char *text);
  */
 void write_text_xy(int16_t x0, int16_t y0, const char *text);
 
+/** 
+ * @brief Write a text string with word wrapping to multiple rows. 
+ */
+void write_text_multirow(const char *text);
+
 /**
  * @brief Set the text cursor for subsequent text rendering.
  *

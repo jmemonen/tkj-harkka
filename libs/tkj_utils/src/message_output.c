@@ -2,6 +2,7 @@
 #include <task.h>
 #include "tkjhat/sdk.h"
 #include "tkj_utils/message_output.h"
+#include "tkjhat/ssd1306.h"
 
 #define MORSE_CODE_UNIT       80 // Morse code unit lenght
 #define DOT_BUZZ_DURATION     (MORSE_CODE_UNIT * 1)
@@ -10,6 +11,8 @@
 #define INTER_CHAR_PAUSE      (MORSE_CODE_UNIT * 3) // Pause duration between characters
 #define WORD_PAUSE            (MORSE_CODE_UNIT * 7) // Pause duration between words
 #define MORSE_TONE_FREQUENCY  600
+
+
 
 void buzzer_play_message(char *msg) {
   while (*msg) {
@@ -52,6 +55,12 @@ void buzzer_play_message(char *msg) {
   }
 }
 
+/* =========================
+ *  DISPLAY SSD1306
+ * ========================= */
+
+// This is too slow to be useful because the write_text_xy()-function 
+// has sleep_ms(800) in it
 void display_morse_message(char *msg) {
   clear_display();
   int display_x = 0;
@@ -110,6 +119,50 @@ void display_morse_message(char *msg) {
     }
     else {
       msg++;
+    }
+  }
+}
+
+void display_message_slow(char *msg) {
+  clear_display();
+
+  int x = 0;
+  int y = 0;
+  int font_w = 6; // px
+  int font_h = 8; // px
+
+  const uint8_t scale = 1;
+
+  const char *p = msg;
+
+  while (*p) {
+    char word[32];
+    int word_len = 0;
+
+    // Find next word in the message
+    while (*p && *p != ' ' && word_len < (int)sizeof(word)-1) {
+      word[word_len++] = *p++;
+    }
+
+    // New line if word is too long for the current row
+    if (x + word_len * font_w > 128) {
+      y += font_h + 2;
+      x = 0;
+    }
+    word[word_len] = '\0';
+
+    write_text_xy(x, y, word);
+    x += word_len * font_w;
+
+    if (*p == ' ') {
+      if (x + font_w < 128) {
+        x += font_w;
+      }
+      else {
+        y += font_h + 2;
+        x = 0;
+      }
+      p++;
     }
   }
 }

@@ -373,6 +373,53 @@ void write_text(const char *text) {
     sleep_ms(800);
 }
 
+void write_text_multirow(const char *text) {
+  clear_display();
+
+  int x = 0;
+  int y = 0;
+  int font_w = 6; // px
+  int font_h = 8; // px
+  int row_spacer = 2; // px
+  const uint8_t scale = 1;
+  const char *p = text;
+
+  while (*p) {
+    char word[32];
+    int word_len = 0;
+
+    // Find next word in the message
+    while (*p && *p != ' ' && word_len < (int)sizeof(word)-1) {
+      word[word_len++] = *p++;
+    }
+
+    // New line if word is too long for the current row
+    if (x + word_len * font_w > 128) {
+      y += font_h + row_spacer;
+      x = 0;
+    }
+    word[word_len] = '\0';
+
+    // Render current word to the off-screen buffer 
+    ssd1306_draw_string(&disp, (uint32_t)x, (uint32_t)y, scale, word);
+    x += word_len * font_w;
+
+    if (*p == ' ') {
+      if (x + font_w < 128) {
+        x += font_w;
+      }
+      else {
+        y += font_h + row_spacer;
+        x = 0;
+      }
+      p++;
+    }
+  }
+  // Update the display panel to show the text.
+  ssd1306_show(&disp);
+  sleep_ms(800);
+}
+
 /**
  * @brief Put a pixel with bounds checking (no immediate display update).
  *
