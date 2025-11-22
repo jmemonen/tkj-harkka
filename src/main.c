@@ -66,7 +66,7 @@ static uint8_t gesture_state = STATE_COOLDOWN;
 // RX queue for handling received messages.
 #define QUEUE_SIZE 3
 static QueueHandle_t rx_queue = NULL;
-static QueueHandle_t buzzer_queue = NULL;
+static QueueHandle_t output_queue = NULL;
 
 // Task handles
 static TaskHandle_t rx_task_handle = NULL;
@@ -74,12 +74,12 @@ static TaskHandle_t rx_task_handle = NULL;
 // *********** Function prototypes ************************
 
 void send_msg(void);
-void display_msg(const char *msg);
+void display_msg(const char *msg); // TODO: Deprecated.
 void debug_print_tx(int res);
 void debug_print_msg_builder(int gst);
 void debug_print_gst_state(int gst);
 void debug_print_rx(uint8_t *buf, char *rx_buf);
-void push_to_buzzer_queue(const char *msg, size_t msg_len);
+void push_to_output_queue(const char *msg, size_t msg_len);
 void reset_rx_buf(void);
 bool init_queues(void);
 
@@ -253,33 +253,36 @@ static void gesture_task(void *arg) {
   }
 }
 
-// Handles the buzzer.
-// Consumes and frees messages from the buzzer_queue.
-static void buzzer_task(void *arg) {
+// A consumer of received messages.
+// Handles output with buzzer and the display.
+static void output_task(void *arg) {
   (void)arg;
   while (!tud_mounted() || !tud_cdc_n_connected(1)) {
     vTaskDelay(pdMS_TO_TICKS(50));
   }
 
   if (DEBUG_BUZZER && usb_serial_connected()) {
-    usb_serial_print("Buzzer Task started...\r\n");
+    usb_serial_print("Output Task started...\r\n");
     usb_serial_flush();
   }
   char *msg;
 
   for (;;) {
-    if (xQueueReceive(buzzer_queue, &msg, portMAX_DELAY) == pdTRUE) {
+    if (xQueueReceive(output_queue, &msg, portMAX_DELAY) == pdTRUE) {
+      dev_comms_state = RX_DISPLAY_STATE;
       if (DEBUG_BUZZER) {
         usb_serial_print("Buzzer playing a msg from queue.\r\n");
         usb_serial_print(msg);
         usb_serial_print("\r\n");
         usb_serial_flush();
       }
+
       buzzer_play_message(msg);
       if (DEBUG_BUZZER) {
         usb_serial_print("Buzzer done playing. Freed msg*\r\n");
       }
       vPortFree(msg);
+      dev_comms_state = RX_STANDBY_STATE;
     }
   }
 }
@@ -303,7 +306,7 @@ static void rx_dispatch_task(void *arg) {
     ulTaskNotifyTake(pdTRUE, portMAX_DELAY); // Sleep until notice.
     dev_comms_state = RX_PROCESSING_STATE;   // Guard the buffer and I2C.
     if (DEBUG_RX) {
-      usb_serial_print("--> RX_PROCESSING_STATE_STATE\r\n");
+      usb_serial_print("--> RX_DISPLAY_STATE\r\n");
     }
 
     tud_cdc_n_write(CDC_ITF_TX, (uint8_t const *)"Message received!\n", 19);
@@ -320,8 +323,8 @@ static void rx_dispatch_task(void *arg) {
       usb_serial_flush();
     }
 
-    // Split the message for the buzzer and the display.
-    push_to_buzzer_queue(rx_buf, rx_buf_len);
+    // Buzz and display
+    push_to_output_queue(rx_buf, rx_buf_len);
     char msg[MSG_BUF_SIZE];
     decode_morse_msg(rx_buf, msg, MSG_BUF_SIZE);
 
@@ -423,14 +426,14 @@ bool init_queues(void) {
   // Dynamic allocations, but that's how the settings were.
   // Gets freed when you pull the plug...
   rx_queue = xQueueCreate(QUEUE_SIZE, sizeof(char *));
-  buzzer_queue = xQueueCreate(QUEUE_SIZE, sizeof(char *));
+  output_queue = xQueueCreate(QUEUE_SIZE, sizeof(char *));
 
-  return rx_queue && buzzer_queue;
+  return rx_queue && output_queue;
 }
 
 // Push the message to the rx_queue for further processing.
 // Sends an ack to the sender (which should be a separate thing tbh).
-void push_to_buzzer_queue(const char *msg, size_t msg_len) {
+void push_to_output_queue(const char *msg, size_t msg_len) {
   if (DEBUG_BUZZER) {
     usb_serial_print("@ push_to_buzzer_queue\r\n");
     usb_serial_print(msg);
@@ -453,7 +456,7 @@ void push_to_buzzer_queue(const char *msg, size_t msg_len) {
         usb_serial_flush();
       }
 
-      xQueueSendToBack(buzzer_queue, &msg_ptr, 0);
+      xQueueSendToBack(output_queue, &msg_ptr, 0);
 
       if (DEBUG_RX) {
         usb_serial_print("Pushed msg to buzzer queue\r\n");
@@ -601,7 +604,7 @@ int main() {
     return 0;
   }
 
-  if (xTaskCreate(buzzer_task, "buzzer", DEFAULT_STACK_SIZE, NULL, 3,
+  if (xTaskCreate(output_task, "buzzer", DEFAULT_STACK_SIZE, NULL, 3,
                   &buzzer)) {
     usb_serial_print("Buzzer Task creation failed\r\n");
   }
