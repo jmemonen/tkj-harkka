@@ -43,6 +43,12 @@ static char debug_buf[DEBUG_BUF_SIZE];
 #define GESTURE_COOLDOWN_DELAY 5
 #define MSG_BUF_SIZE 256
 
+// Buzzer
+#define BUZ_GEST_FREQ_LOW 314
+#define BUZ_GEST_FREQ_HIGH 420
+#define BUZ_GEST_LEN_DOT 25
+#define BUZ_GEST_LEN_DASH 150
+
 // Sensor data
 static motion_data_t motion_data;
 
@@ -53,8 +59,8 @@ static char rx_buf[MSG_BUF_SIZE];
 static size_t rx_buf_len = 0;
 
 // Device state
-enum comms_state { STANDBY_STATE, RX_DISPLAY_STATE };
-static uint8_t dev_comms_state = STANDBY_STATE;
+enum comms_state { RX_STANDBY_STATE, RX_PROCESSING_STATE, RX_DISPLAY_STATE };
+static uint8_t dev_comms_state = RX_STANDBY_STATE;
 static uint8_t gesture_state = STATE_COOLDOWN;
 
 // RX queue for handling received messages.
@@ -144,7 +150,7 @@ static void gesture_task(void *arg) {
 
     // We'll eventually display received messages somehow.
     // This stops gesture input while displaying.
-    if (dev_comms_state == RX_DISPLAY_STATE) {
+    if (dev_comms_state != RX_STANDBY_STATE) {
       vTaskDelay(pdMS_TO_TICKS(5));
       continue;
     }
@@ -186,6 +192,7 @@ static void gesture_task(void *arg) {
         cooldown_delay = GESTURE_COOLDOWN_DELAY;
         gesture_state = STATE_COOLDOWN;
         rgb_led_write(0, 0, 2);
+        buzzer_play_tone(BUZ_GEST_FREQ_LOW, BUZ_GEST_LEN_DOT);
       }
       break;
 
@@ -196,6 +203,7 @@ static void gesture_task(void *arg) {
         cooldown_delay = GESTURE_COOLDOWN_DELAY;
         gesture_state = STATE_COOLDOWN;
         rgb_led_write(0, 0, 2);
+        buzzer_play_tone(BUZ_GEST_FREQ_LOW, BUZ_GEST_LEN_DASH);
       }
       break;
 
@@ -206,6 +214,7 @@ static void gesture_task(void *arg) {
         cooldown_delay = GESTURE_COOLDOWN_DELAY;
         gesture_state = STATE_COOLDOWN;
         rgb_led_write(0, 0, 2);
+        buzzer_play_tone(BUZ_GEST_FREQ_HIGH, BUZ_GEST_LEN_DOT);
       }
       break;
 
@@ -224,6 +233,7 @@ static void gesture_task(void *arg) {
         gesture_state = STATE_COOLDOWN;
         cooldown_delay = GESTURE_COOLDOWN_DELAY;
         rgb_led_write(0, 0, 2);
+        buzzer_play_tone(BUZ_GEST_FREQ_HIGH, BUZ_GEST_LEN_DASH);
       }
       break;
 
@@ -274,7 +284,9 @@ static void buzzer_task(void *arg) {
   }
 }
 
-// A dispatcher task for received complete messages.
+// Dispatcher for processing received messages.
+// Processess the RX buffer and delegates work to output tasks.
+// This exists mostly to keep the cdc callback interrupt short.
 static void rx_dispatch_task(void *arg) {
   (void)arg;
 
@@ -288,11 +300,10 @@ static void rx_dispatch_task(void *arg) {
   }
 
   for (;;) {
-    ulTaskNotifyTake(pdTRUE, portMAX_DELAY); // Blocked until notice.
-    dev_comms_state =
-        RX_DISPLAY_STATE; // Block others from using I2C and stuff.
+    ulTaskNotifyTake(pdTRUE, portMAX_DELAY); // Sleep until notice.
+    dev_comms_state = RX_PROCESSING_STATE;   // Guard the buffer and I2C.
     if (DEBUG_RX) {
-      usb_serial_print("--> RX_DISPLAY_STATE\r\n");
+      usb_serial_print("--> RX_PROCESSING_STATE_STATE\r\n");
     }
 
     tud_cdc_n_write(CDC_ITF_TX, (uint8_t const *)"Message received!\n", 19);
@@ -313,15 +324,13 @@ static void rx_dispatch_task(void *arg) {
     push_to_buzzer_queue(rx_buf, rx_buf_len);
     char msg[MSG_BUF_SIZE];
     decode_morse_msg(rx_buf, msg, MSG_BUF_SIZE);
-    usb_serial_flush();
 
-    reset_rx_buf();
-
-    display_msg(msg);                // TODO: Implement this!
-    dev_comms_state = STANDBY_STATE; // Back to business as usual.
+    dev_comms_state = RX_STANDBY_STATE; // Let others use rx_buf.
     if (DEBUG_RX) {
       usb_serial_print("--> STANDBY_STATE\r\n");
     }
+
+    reset_rx_buf();
   }
 }
 
@@ -348,7 +357,7 @@ void tud_cdc_rx_cb(uint8_t itf) {
   }
 
   // Don't mess with buffer if a complete message is being processed.
-  if (dev_comms_state == RX_DISPLAY_STATE) {
+  if (dev_comms_state == RX_PROCESSING_STATE) {
     return;
   }
 
