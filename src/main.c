@@ -1,4 +1,5 @@
 #include <pico/time.h>
+#include <pico/types.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -15,6 +16,7 @@
 #include "portable.h"
 #include "portmacro.h"
 #include "projdefs.h"
+#include "tkj_utils/message_output.h"
 #include "tkj_utils/tkj_utils.h"
 #include "tkjhat/sdk.h"
 #include "usbSerialDebug/helper.h"
@@ -26,7 +28,8 @@
 #define DEBUG_IMU 0
 #define DEBUG_GESTURE_STATE 0
 #define DEBUG_MSG_BUILDER 0
-#define DEBUG_RX 0
+#define DEBUG_RX 1
+#define DEBUG_BUZZER 1
 
 #define DEBUG_BUF_SIZE 256
 static char debug_buf[DEBUG_BUF_SIZE];
@@ -40,33 +43,44 @@ static char debug_buf[DEBUG_BUF_SIZE];
 #define GESTURE_COOLDOWN_DELAY 5
 #define MSG_BUF_SIZE 256
 
+// Buzzer
+#define BUZ_GEST_FREQ_LOW 314
+#define BUZ_GEST_FREQ_HIGH 420
+#define BUZ_GEST_LEN_DOT 25
+#define BUZ_GEST_LEN_DASH 150
+
 // Sensor data
 static motion_data_t motion_data;
 
 // TX and RX buffers and such.
 static char _msg_buf[MSG_BUF_SIZE];
 static msg_builder_t msg_b;
+static char rx_buf[MSG_BUF_SIZE];
+static size_t rx_buf_len = 0;
 
 // Device state
-enum comms_state { STANDBY_STATE, RX_DISPLAY_STATE };
-static uint8_t dev_comms_state = STANDBY_STATE;
+enum comms_state { RX_STANDBY_STATE, RX_PROCESSING_STATE, RX_DISPLAY_STATE };
+static uint8_t dev_comms_state = RX_STANDBY_STATE;
 static uint8_t gesture_state = STATE_COOLDOWN;
 
 // RX queue for handling received messages.
 #define QUEUE_SIZE 3
-static QueueHandle_t rx_queue;
-static QueueHandle_t buzzer_queue;
+static QueueHandle_t rx_queue = NULL;
+static QueueHandle_t output_queue = NULL;
+
+// Task handles
+static TaskHandle_t rx_task_handle = NULL;
 
 // *********** Function prototypes ************************
 
 void send_msg(void);
-void display_msg(const char *msg);
+void display_msg(const char *msg); // TODO: Deprecated.
 void debug_print_tx(int res);
 void debug_print_msg_builder(int gst);
 void debug_print_gst_state(int gst);
 void debug_print_rx(uint8_t *buf, char *rx_buf);
-void debug_print_rx_task(const char *msg);
-void push_to_rx_queue(uint8_t itf, const char *msg, size_t msg_len);
+void push_to_output_queue(const char *msg, size_t msg_len);
+void reset_rx_buf(void);
 bool init_queues(void);
 
 // *********** FREERTOS TASKS  ****************************
@@ -136,7 +150,7 @@ static void gesture_task(void *arg) {
 
     // We'll eventually display received messages somehow.
     // This stops gesture input while displaying.
-    if (dev_comms_state == RX_DISPLAY_STATE) {
+    if (dev_comms_state != RX_STANDBY_STATE) {
       vTaskDelay(pdMS_TO_TICKS(5));
       continue;
     }
@@ -178,6 +192,7 @@ static void gesture_task(void *arg) {
         cooldown_delay = GESTURE_COOLDOWN_DELAY;
         gesture_state = STATE_COOLDOWN;
         rgb_led_write(0, 0, 2);
+        buzzer_play_tone(BUZ_GEST_FREQ_LOW, BUZ_GEST_LEN_DOT);
       }
       break;
 
@@ -188,6 +203,7 @@ static void gesture_task(void *arg) {
         cooldown_delay = GESTURE_COOLDOWN_DELAY;
         gesture_state = STATE_COOLDOWN;
         rgb_led_write(0, 0, 2);
+        buzzer_play_tone(BUZ_GEST_FREQ_LOW, BUZ_GEST_LEN_DASH);
       }
       break;
 
@@ -198,6 +214,7 @@ static void gesture_task(void *arg) {
         cooldown_delay = GESTURE_COOLDOWN_DELAY;
         gesture_state = STATE_COOLDOWN;
         rgb_led_write(0, 0, 2);
+        buzzer_play_tone(BUZ_GEST_FREQ_HIGH, BUZ_GEST_LEN_DOT);
       }
       break;
 
@@ -216,6 +233,7 @@ static void gesture_task(void *arg) {
         gesture_state = STATE_COOLDOWN;
         cooldown_delay = GESTURE_COOLDOWN_DELAY;
         rgb_led_write(0, 0, 2);
+        buzzer_play_tone(BUZ_GEST_FREQ_HIGH, BUZ_GEST_LEN_DASH);
       }
       break;
 
@@ -235,13 +253,44 @@ static void gesture_task(void *arg) {
   }
 }
 
-// Handles the buzzer.
-static void buzzer_task(void *arg) { (void)arg; }
+// A consumer of received messages.
+// Handles output with buzzer and the display.
+static void output_task(void *arg) {
+  (void)arg;
+  while (!tud_mounted() || !tud_cdc_n_connected(1)) {
+    vTaskDelay(pdMS_TO_TICKS(50));
+  }
 
-// TODO: Could be renamed?
-//       The cdc callback handles most of the actual receiving
-//       and this is more of a message consumer for displaying.
-static void rx_task(void *arg) {
+  if (DEBUG_BUZZER && usb_serial_connected()) {
+    usb_serial_print("Output Task started...\r\n");
+    usb_serial_flush();
+  }
+  char *msg;
+
+  for (;;) {
+    if (xQueueReceive(output_queue, &msg, portMAX_DELAY) == pdTRUE) {
+      dev_comms_state = RX_DISPLAY_STATE;
+      if (DEBUG_BUZZER) {
+        usb_serial_print("Buzzer playing a msg from queue.\r\n");
+        usb_serial_print(msg);
+        usb_serial_print("\r\n");
+        usb_serial_flush();
+      }
+
+      buzzer_play_message(msg);
+      if (DEBUG_BUZZER) {
+        usb_serial_print("Buzzer done playing. Freed msg*\r\n");
+      }
+      vPortFree(msg);
+      dev_comms_state = RX_STANDBY_STATE;
+    }
+  }
+}
+
+// Dispatcher for processing received messages.
+// Processess the RX buffer and delegates work to output tasks.
+// This exists mostly to keep the cdc callback interrupt short.
+static void rx_dispatch_task(void *arg) {
   (void)arg;
 
   while (!tud_mounted() || !tud_cdc_n_connected(1)) {
@@ -254,28 +303,37 @@ static void rx_task(void *arg) {
   }
 
   for (;;) {
-    char *msg;
-
-    // Waits for messages. No blocking.
-    if (xQueueReceive(rx_queue, &msg, 0) == pdTRUE) {
-      if (!msg) {
-        // Somebody, put something, somebody put something in my queue.
-        continue;
-      }
-
-      if (DEBUG_RX) {
-        debug_print_rx_task(msg);
-      }
-
-      // Process the message. Use the display and go beep beep.
-      // REMEMBER THAT THE I2C CAN BE USED BY A SINGLE DEVICE AT A TIME.
-      // Use the display state for that?
-      dev_comms_state = RX_DISPLAY_STATE;
-      xQueueSendToBack(buzzer_queue, msg, 0);
-      display_msg(msg); // TODO: Implement this!
-      vPortFree(msg);   // Free the heap allocated memory after done.
-      dev_comms_state = STANDBY_STATE; // Back to business as usual.
+    ulTaskNotifyTake(pdTRUE, portMAX_DELAY); // Sleep until notice.
+    dev_comms_state = RX_PROCESSING_STATE;   // Guard the buffer and I2C.
+    if (DEBUG_RX) {
+      usb_serial_print("--> RX_DISPLAY_STATE\r\n");
     }
+
+    tud_cdc_n_write(CDC_ITF_TX, (uint8_t const *)"Message received!\n", 19);
+    tud_cdc_write_flush();
+
+    if (rx_buf_len < 1) {
+      // Somebody, put nothing, somebody put nothing in my queue.
+      reset_rx_buf();
+      continue;
+    }
+
+    if (DEBUG_RX) {
+      usb_serial_print("RX Task processing a msg.\r\n");
+      usb_serial_flush();
+    }
+
+    // Buzz and display
+    push_to_output_queue(rx_buf, rx_buf_len);
+    char msg[MSG_BUF_SIZE];
+    decode_morse_msg(rx_buf, msg, MSG_BUF_SIZE);
+
+    dev_comms_state = RX_STANDBY_STATE; // Let others use rx_buf.
+    if (DEBUG_RX) {
+      usb_serial_print("--> STANDBY_STATE\r\n");
+    }
+
+    reset_rx_buf();
   }
 }
 
@@ -285,9 +343,6 @@ static void rx_task(void *arg) {
 // We just define it here and the tud_task handles the rest, I guess.
 // This is pretty much straight outta the example.
 void tud_cdc_rx_cb(uint8_t itf) {
-  static char rx_buf[MSG_BUF_SIZE];
-  static size_t rx_len;
-
   // allocate buffer for the data in the stack
   uint8_t read_buf[CFG_TUD_CDC_RX_BUFSIZE + 1];
 
@@ -304,19 +359,24 @@ void tud_cdc_rx_cb(uint8_t itf) {
     return;
   }
 
+  // Don't mess with buffer if a complete message is being processed.
+  if (dev_comms_state == RX_PROCESSING_STATE) {
+    return;
+  }
+
   bool end_of_msg = false;
   for (size_t idx = 0; idx < count; idx++) {
-    if (rx_len == MSG_BUF_SIZE - 1) {
-      rx_buf[rx_len] = '\0'; // Truncate
+    if (rx_buf_len == MSG_BUF_SIZE - 1) {
+      rx_buf[rx_buf_len] = '\0'; // Truncate
       continue;
     }
-    if (rx_len >= MSG_BUF_SIZE) {
+    if (rx_buf_len >= MSG_BUF_SIZE) {
       continue; // Discard overflow until end of message.
     }
-    rx_buf[rx_len++] = read_buf[idx];
+    rx_buf[rx_buf_len++] = read_buf[idx];
     if (read_buf[idx] == '\n') {
       end_of_msg = true;
-      rx_buf[rx_len++] = '\0';
+      rx_buf[rx_buf_len++] = '\0';
     }
   }
 
@@ -329,15 +389,20 @@ void tud_cdc_rx_cb(uint8_t itf) {
     return;
   }
 
-  // Push to the queue and let the pipeline handle the rest.
-  push_to_rx_queue(itf, rx_buf, rx_len);
-
-  // Done. Reset buffer.
-  rx_buf[0] = '\0';
-  rx_len = 0;
+  // Notify the dispatcher task a complete message has been received.
+  BaseType_t pxHigherPriorityTaskWoken = pdFALSE;
+  vTaskNotifyGiveFromISR(rx_task_handle, &pxHigherPriorityTaskWoken);
+  if (pxHigherPriorityTaskWoken) {
+    portYIELD_FROM_ISR(pxHigherPriorityTaskWoken);
+  }
 }
 
 // ************* HELPER FUNCTIONS ******************
+//
+void reset_rx_buf(void) {
+  rx_buf[0] = '\0';
+  rx_buf_len = 0;
+}
 
 // Sends the current message to the serial-client if it's ready.
 void send_msg(void) {
@@ -353,7 +418,7 @@ void send_msg(void) {
 void display_msg(const char *msg) {
 
   // ===== Your code goes here! ========
-  usb_serial_print("Seasons greetings from display_msg!");
+  usb_serial_print("Seasons greetings from display_msg!\r\n");
   // ===================================
 }
 
@@ -361,39 +426,46 @@ bool init_queues(void) {
   // Dynamic allocations, but that's how the settings were.
   // Gets freed when you pull the plug...
   rx_queue = xQueueCreate(QUEUE_SIZE, sizeof(char *));
-  buzzer_queue = xQueueCreate(QUEUE_SIZE, sizeof(char *));
+  output_queue = xQueueCreate(QUEUE_SIZE, sizeof(char *));
 
-  return rx_queue && buzzer_queue;
+  return rx_queue && output_queue;
 }
 
 // Push the message to the rx_queue for further processing.
 // Sends an ack to the sender (which should be a separate thing tbh).
-void push_to_rx_queue(uint8_t itf, const char *msg, size_t msg_len) {
+void push_to_output_queue(const char *msg, size_t msg_len) {
+  if (DEBUG_BUZZER) {
+    usb_serial_print("@ push_to_buzzer_queue\r\n");
+    usb_serial_print(msg);
+    usb_serial_print("\r\n");
+    usb_serial_flush();
+  }
+
   if (uxQueueSpacesAvailable(rx_queue)) {
     // Expecting only human input so the allocations shouldn't get out of hands.
     // They are also limited by the memory available in the queue.
     char *msg_ptr = pvPortMalloc(msg_len * sizeof(char));
+
     if (msg_ptr) {
       memcpy(msg_ptr, msg, msg_len);
-      // This is apparently sending from an interruption, so needs
-      // extra shenanigans here as per FreeRTOS documentation.
-      BaseType_t xHigherPriorityTaskAwoken = pdFALSE;
-      xQueueSendToBackFromISR(rx_queue, &msg_ptr, &xHigherPriorityTaskAwoken);
-      if (xHigherPriorityTaskAwoken) {
-        portYIELD_FROM_ISR(xHigherPriorityTaskAwoken);
-      }
-      if (DEBUG_RX) {
-        usb_serial_print("Sent to queue:\r\n");
+
+      if (DEBUG_BUZZER) {
+        usb_serial_print("msg_ptr is now:\r\n");
         usb_serial_print(msg_ptr);
+        usb_serial_print("\r\n");
+        usb_serial_flush();
       }
-      tud_cdc_n_write(itf, (uint8_t const *)"Message received!\n", 19);
+
+      xQueueSendToBack(output_queue, &msg_ptr, 0);
+
+      if (DEBUG_RX) {
+        usb_serial_print("Pushed msg to buzzer queue\r\n");
+      }
     } else { // We give up!
-      tud_cdc_n_write(itf, (uint8_t const *)"Error receiving message\n", 25);
       if (DEBUG_RX) {
         usb_serial_print("Couldn't allocate memory for received message!\n");
       }
     }
-    tud_cdc_n_write_flush(itf);
     usb_serial_flush();
   }
 }
@@ -454,14 +526,9 @@ void debug_print_gst_state(int gst) {
 void debug_print_rx(uint8_t *buf, char *rx_buf) {
   usb_serial_print("\r\nReceived on CDC 1:");
   usb_serial_print((char *)buf);
-  usb_serial_print("\r\nrx_buf: ");
+  usb_serial_print("\r\n");
+  usb_serial_print("rx_buf: ");
   usb_serial_print(rx_buf);
-  usb_serial_flush();
-}
-
-void debug_print_rx_task(const char *msg) {
-  usb_serial_print("RX Task processing a msg: ");
-  usb_serial_print(msg);
   usb_serial_print("\r\n");
   usb_serial_flush();
 }
@@ -489,10 +556,11 @@ int main() {
     usb_serial_print("Failed to initialize ICM-42670P.\r\n");
   }
 
-  // Init the pretty colourful LED
+  // Init the pretty colourful LED and the buzzer
   init_rgb_led();
   sleep_ms(500);
   rgb_led_write(0, 0, 0);
+  init_buzzer();
 
   // Initializations for data structures.
   msg_init(&msg_b, _msg_buf, MSG_BUF_SIZE);
@@ -500,7 +568,7 @@ int main() {
     usb_serial_print("Failed to initieate RX Queue.");
   }
 
-  TaskHandle_t gesture, hUSB, sensor, rx = NULL;
+  TaskHandle_t gesture, hUSB, sensor, buzzer = NULL;
 
   xTaskCreate(usbTask, "usb", 2048, NULL, 3, &hUSB);
 #if (configNUMBER_OF_CORES > 1)
@@ -519,19 +587,26 @@ int main() {
 
   // TODO: Clean these away into a function...
   if (result != pdPASS) {
-    usb_serial_print("Position Task creation failed\n");
+    usb_serial_print("Position Task creation failed\r\n");
     return 0;
   }
 
   if (xTaskCreate(sensorTask, "sensor", DEFAULT_STACK_SIZE, NULL, 2, &sensor) !=
       pdPASS) {
-    usb_serial_print("Sensor Task creation failed\n");
+    usb_serial_print("Sensor Task creation failed\r\n");
     return 0;
   }
 
-  if (xTaskCreate(rx_task, "rx", DEFAULT_STACK_SIZE, NULL, 2, &rx) != pdPASS) {
-    usb_serial_print("RX Task creation failed\n");
+  result = xTaskCreate(rx_dispatch_task, "rx_dispatch", DEFAULT_STACK_SIZE,
+                       NULL, 2, &rx_task_handle);
+  if (result != pdPASS) {
+    usb_serial_print("RX Dispatcher Task creation failed\r\n");
     return 0;
+  }
+
+  if (xTaskCreate(output_task, "buzzer", DEFAULT_STACK_SIZE, NULL, 3,
+                  &buzzer)) {
+    usb_serial_print("Buzzer Task creation failed\r\n");
   }
 
   // These have to be right before the scheduler.
