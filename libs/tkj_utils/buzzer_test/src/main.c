@@ -3,13 +3,7 @@
 #include <task.h>
 
 #include <tkjhat/sdk.h>
-<<<<<<< HEAD:libs/tkj_utils/buzzer_test/src/main.c
-#include <tkj_utils/buzzer.h>
-=======
-#include <sensors/message_output.h>
->>>>>>> a83f94982b1c2d2c7e0e17a5a42b327058891da2:libs/sensors/buzzer_test/src/main.c
-
-
+#include <tkj_utils/message_output.h>
 
 // Buzzer task
 static void buzzer_task(void *arg) {
