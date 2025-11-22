@@ -14,6 +14,7 @@ target_include_directories(${APP_NAME}
   ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
+
 target_link_libraries(${APP_NAME}
   PUBLIC
   FreeRTOS-Kernel
