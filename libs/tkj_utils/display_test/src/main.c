@@ -11,13 +11,15 @@
 static void display_task(void *arg) {
   (void)arg;
   
-  char msg[] = "- . .-. ...- .  .--- .-  -.- .. .. - --- ...  -.- .- .-.. --- .. ... - .-   ";
+  // char msg[] = "- . .-. ...- .  .--- .-  -.- .. .. - --- ...  -.- .- .-.. --- .. ... - .-   ";
   // char msg[] = "... - .-   ";
-  // char viesti[] = "Terve ja kiitos kaloista!";
+  char viesti[] = "Terve ja kiitos kaloista! Terve ja kiitos kaloista! Terve ja kiitos kaloista!";
 
   for (;;) {
-    display_morse_message(msg);
+    write_text_multirow(viesti);
     vTaskDelay(pdMS_TO_TICKS(5000));
+    clear_display();
+    vTaskDelay(pdMS_TO_TICKS(2000));
   }
 }
 
