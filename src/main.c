@@ -1,4 +1,5 @@
 #include <pico/time.h>
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
@@ -52,11 +53,9 @@ static uint8_t dev_comms_state = STANDBY_STATE;
 static uint8_t gesture_state = STATE_COOLDOWN;
 
 // RX queue for handling received messages.
-// Needs some stuff to keep memory allocations static.
 #define QUEUE_SIZE 3
 static QueueHandle_t rx_queue;
-// static uint8_t _rx_queue_storage_buf[MSG_BUF_SIZE * QUEUE_SIZE];
-// static StaticQueue_t *_rx_queue_buf;
+static QueueHandle_t buzzer_queue;
 
 // *********** Function prototypes ************************
 
@@ -68,7 +67,7 @@ void debug_print_gst_state(int gst);
 void debug_print_rx(uint8_t *buf, char *rx_buf);
 void debug_print_rx_task(const char *msg);
 void push_to_rx_queue(uint8_t itf, const char *msg, size_t msg_len);
-QueueHandle_t init_rx_queue(void);
+bool init_queues(void);
 
 // *********** FREERTOS TASKS  ****************************
 
@@ -236,6 +235,9 @@ static void gesture_task(void *arg) {
   }
 }
 
+// Handles the buzzer.
+static void buzzer_task(void *arg) { (void)arg; }
+
 // TODO: Could be renamed?
 //       The cdc callback handles most of the actual receiving
 //       and this is more of a message consumer for displaying.
@@ -269,6 +271,7 @@ static void rx_task(void *arg) {
       // REMEMBER THAT THE I2C CAN BE USED BY A SINGLE DEVICE AT A TIME.
       // Use the display state for that?
       dev_comms_state = RX_DISPLAY_STATE;
+      xQueueSendToBack(buzzer_queue, msg, 0);
       display_msg(msg); // TODO: Implement this!
       vPortFree(msg);   // Free the heap allocated memory after done.
       dev_comms_state = STANDBY_STATE; // Back to business as usual.
@@ -354,10 +357,13 @@ void display_msg(const char *msg) {
   // ===================================
 }
 
-QueueHandle_t init_rx_queue(void) {
+bool init_queues(void) {
   // Dynamic allocations, but that's how the settings were.
   // Gets freed when you pull the plug...
-  return rx_queue = xQueueCreate(QUEUE_SIZE, sizeof(char *));
+  rx_queue = xQueueCreate(QUEUE_SIZE, sizeof(char *));
+  buzzer_queue = xQueueCreate(QUEUE_SIZE, sizeof(char *));
+
+  return rx_queue && buzzer_queue;
 }
 
 // Push the message to the rx_queue for further processing.
@@ -490,7 +496,7 @@ int main() {
 
   // Initializations for data structures.
   msg_init(&msg_b, _msg_buf, MSG_BUF_SIZE);
-  if (!init_rx_queue()) {
+  if (!init_queues()) {
     usb_serial_print("Failed to initieate RX Queue.");
   }
 
