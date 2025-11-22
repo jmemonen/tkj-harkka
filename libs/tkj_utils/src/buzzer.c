@@ -1,7 +1,7 @@
 #include <FreeRTOS.h>
 #include <task.h>
 #include "tkjhat/sdk.h"
-#include "sensors/buzzer.h"
+#include "tkj_utils/buzzer.h"
 
 #define MORSE_CODE_UNIT       80 // Morse code unit lenght
 #define DOT_BUZZ_DURATION     (MORSE_CODE_UNIT * 1)

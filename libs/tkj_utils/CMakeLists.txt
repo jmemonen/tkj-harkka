@@ -1,9 +1,9 @@
-# sensors
+# tkj_utils
 
-set (APP_NAME sensors)
+set (APP_NAME tkj_utils)
 
 add_library(${APP_NAME} STATIC
-  src/sensors.c
+  src/tkj_utils.c
   src/buzzer.c
 )
 

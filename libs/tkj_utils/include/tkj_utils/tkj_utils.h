@@ -31,18 +31,23 @@ typedef enum {
   GESTURE_SEND,
 } Gesture_t;
 
+// A string of the field names for convenient csv output
+// of IMU values from the a motion_data_t.
 extern const char IMU_FIELD_NAMES[];
 
-int hello_sensors(void);
-
-// A wrapper for ICM42670_read_sensor_data. Reads sensor values into a struct.
+// A wrapper for ICM42670_read_sensor_data. 
+// Reads sensor values directly into a motion_data_t struct.
 void read_motion_data(motion_data_t *data);
 
-// Read IMU sensor data and filter it with exponential moving average. Alpha
-// must be ]0, 1].
+// Read IMU sensor data and filter it with exponential moving average. 
+// Alpha must be ]0, 1].
+// A bigger alpha means smoother but less responsive readings.
 void read_filtered_motion_data(motion_data_t *data, float alpha);
 
 // Formats the motion data into a given buffer in csv form.
+// Print out IMU_FIELD_NAMES first to get the field names:
+//
+// "accel_x,accel_y,accel_z,gyro_x,gyro_y,gyro_z,tmp\r\n";
 void format_motion_csv(const motion_data_t *data, char *buf, size_t buf_size);
 
 // Calculates the exponential moving average of two floats

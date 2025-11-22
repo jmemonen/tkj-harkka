@@ -14,7 +14,7 @@ target_link_libraries(${DEFAULT_TARGET} PRIVATE
   FreeRTOS-Kernel
   FreeRTOS-Kernel-Heap4
   TKJHAT_SDK
-  sensors
+  tkj_utils
 )
 
 pico_enable_stdio_usb(${DEFAULT_TARGET} 1)

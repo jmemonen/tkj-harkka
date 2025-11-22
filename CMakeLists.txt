@@ -79,7 +79,7 @@ add_subdirectory(libs/TKJHAT)
 add_subdirectory(libs/usb-serial-debug)
 # If created new libraries, include them here. 
 # You can EDIT it if you add new libraries
-add_subdirectory(libs/sensors)
+add_subdirectory(libs/tkj_utils)
 add_subdirectory(libs/morso)
 # ===============================================================================================
 
@@ -87,7 +87,7 @@ add_subdirectory(libs/morso)
 # Add examples if necessary here
 # Uncomment the examples that you want to include in your project.
 #
-add_subdirectory(libs/sensors/buzzer_test)
+add_subdirectory(libs/tkj_utils/buzzer_test)
 #
 # add_subdirectory(examples/hello_blink)
 # add_subdirectory(examples/hello_blink_freertos)
@@ -128,7 +128,7 @@ target_link_libraries(${MAIN_TARGET}
         FreeRTOS-Kernel-Heap4
         TKJHAT_SDK
         usb_serial_debug
-        sensors
+        tkj_utils
         morso
 )
 

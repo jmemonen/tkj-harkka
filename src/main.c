@@ -14,7 +14,7 @@
 #include "portable.h"
 #include "portmacro.h"
 #include "projdefs.h"
-#include "sensors/sensors.h"
+#include "tkj_utils/tkj_utils.h"
 #include "tkjhat/sdk.h"
 #include "usbSerialDebug/helper.h"
 

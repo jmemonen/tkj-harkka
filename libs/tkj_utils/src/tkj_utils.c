@@ -1,5 +1,5 @@
 #include "tkjhat/sdk.h"
-#include <sensors/sensors.h>
+#include <tkj_utils/tkj_utils.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -7,19 +7,28 @@
 #define ABS(x) (((x) < (0)) ? (-x) : (x))
 
 // Gesture thresholds
+// READY
 #define READY_G_SUM 20.0f
 #define READY_AZ 0.7f
 #define READY_AY -0.3f
+
+// SEND
 #define SEND_AZ 1.8f
 #define SEND_GX -180.0f
+
+// SPACE
 #define SPACE_AZ 0.35f
 #define SPACE_GX 120.0f
+
+// DOT
 #define DOT_AX 0.4f
 #define DOT_GY_GZ 100.0f
+
+// DASH
 #define DASH_AX -0.5f
 #define DASH_GY_GZ -100.0f
 
-// Field names for printing out in csv-form.
+// Field names in order for printing out in csv-form.
 const char IMU_FIELD_NAMES[] =
     "accel_x,accel_y,accel_z,gyro_x,gyro_y,gyro_z,tmp\r\n";
 
