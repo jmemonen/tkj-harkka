@@ -12,14 +12,11 @@ static void display_task(void *arg) {
   (void)arg;
   
   char msg[] = "- . .-. ...- .  .--- .-  -.- .. .. - --- ...  -.- .- .-.. --- .. ... - .-   ";
-  char viesti[] = "Terve ja kiitos kaloista!";
+  // char msg[] = "... - .-   ";
+  // char viesti[] = "Terve ja kiitos kaloista!";
 
   for (;;) {
-    clear_display();
-    write_text_xy(0, 0, msg);
-    vTaskDelay(pdMS_TO_TICKS(5000));
-    clear_display();
-    write_text_xy(0, 0, viesti);
+    display_morse_message(msg);
     vTaskDelay(pdMS_TO_TICKS(5000));
   }
 }
@@ -27,11 +24,12 @@ static void display_task(void *arg) {
 int main() {
   stdio_init_all();
   init_hat_sdk();
+  init_buzzer();
   init_display();
 
   clear_display();
 
-  sleep_ms(1000);
+  sleep_ms(3000);
   
   TaskHandle_t displayTask = NULL;
 
