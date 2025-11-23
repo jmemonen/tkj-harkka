@@ -57,3 +57,10 @@ float exp_moving_avg(float current, float next, float alpha);
 // GESTURE_DOT: Dot (left flick)
 // GESTURE_DASH: Dash (right flick)
 Gesture_t detect_gesture(const motion_data_t *data);
+
+// Combine accelerometer and gyro data.
+// Uses sensor fusion with simple complimentary filter.
+// Based on a python complimentary filter by Philip Salmony:
+// https://github.com/pms67/Attitude-Estimation/blob/master/complimentary_imu.py
+// We ended up scrapping the idea of using sensor fusion.
+// void sensor_fusion(motion_data_t *data, float alpha, float sample_time);
