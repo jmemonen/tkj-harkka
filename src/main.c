@@ -286,13 +286,6 @@ static void output_task(void *arg) {
 
   for (;;) {
     if (xQueueReceive(output_queue, &msg, portMAX_DELAY) == pdTRUE) {
-      dev_comms_state = RX_DISPLAY_STATE;
-      if (DEBUG_BUZZER) {
-        usb_serial_print("Buzzer playing a msg from queue.\r\n");
-        usb_serial_print(msg);
-        usb_serial_print("\r\n");
-        usb_serial_flush();
-      }
       char ascii[MSG_BUF_SIZE];
       decode_morse_msg(msg, ascii, MSG_BUF_SIZE);
 
@@ -301,6 +294,12 @@ static void output_task(void *arg) {
       write_text_multirow(ascii);
       xSemaphoreGive(I2C_mutex);
 
+      if (DEBUG_BUZZER) {
+        usb_serial_print("Buzzer playing a msg from queue.\r\n");
+        usb_serial_print(msg);
+        usb_serial_print("\r\n");
+        usb_serial_flush();
+      }
       buzzer_play_message(msg);
       if (DEBUG_BUZZER) {
         usb_serial_print("Buzzer done playing. Freed msg*\r\n");
@@ -313,15 +312,13 @@ static void output_task(void *arg) {
       sleep_ms(500);
       clear_display();
       xSemaphoreGive(I2C_mutex);
-
-      dev_comms_state = RX_STANDBY_STATE;
     }
   }
 }
 
 // Dispatcher for processing received messages.
-// Processess the RX buffer and delegates work to output tasks.
-// This exists mostly to keep the cdc callback interrupt short.
+// Grabs the contents of the RX buffer and delegates it forwards.
+// This exists mostly to keep the cdc callback interrupt short and simple.
 static void rx_dispatch_task(void *arg) {
   (void)arg;
 
@@ -336,17 +333,18 @@ static void rx_dispatch_task(void *arg) {
 
   for (;;) {
     ulTaskNotifyTake(pdTRUE, portMAX_DELAY); // Sleep until notice.
-    dev_comms_state = RX_PROCESSING_STATE;   // Guard the buffer and I2C.
+    dev_comms_state = RX_PROCESSING_STATE;   // Guard the RX buffer
     if (DEBUG_RX) {
       usb_serial_print("--> RX_DISPLAY_STATE\r\n");
     }
 
-    tud_cdc_n_write(CDC_ITF_TX, (uint8_t const *)"Message received!\n", 19);
-    tud_cdc_write_flush();
-
     if (rx_buf_len < 1) {
       // Somebody, put nothing, somebody put nothing in my queue.
       reset_rx_buf();
+      dev_comms_state = RX_STANDBY_STATE; // Let others use rx_buf.
+      if (DEBUG_RX) {
+        usb_serial_print("--> STANDBY_STATE\r\n");
+      }
       continue;
     }
 
@@ -355,14 +353,11 @@ static void rx_dispatch_task(void *arg) {
       usb_serial_flush();
     }
 
-    // Buzz and display
     push_to_output_queue(rx_buf, rx_buf_len);
-    char msg[MSG_BUF_SIZE];
-    decode_morse_msg(rx_buf, msg, MSG_BUF_SIZE);
 
     dev_comms_state = RX_STANDBY_STATE; // Let others use rx_buf.
     if (DEBUG_RX) {
-      usb_serial_print("--> STANDBY_STATE\r\n");
+      usb_serial_print("--> RX_STANDBY_STATE\r\n");
     }
 
     reset_rx_buf();
@@ -420,6 +415,9 @@ void tud_cdc_rx_cb(uint8_t itf) {
   if (!end_of_msg) {
     return;
   }
+
+  tud_cdc_n_write(itf, (uint8_t const *)"Message received!\n", 19);
+  tud_cdc_write_flush();
 
   // Notify the dispatcher task a complete message has been received.
   BaseType_t pxHigherPriorityTaskWoken = pdFALSE;
