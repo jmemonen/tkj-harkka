@@ -8,3 +8,7 @@ Thumbs.db
 libs/morso/tests/build/
 libs/TKJHAT/docs/out/
 compile_commands.json
+
+# Wokwi-simulator files
+diagram.json
+wokwi.toml
