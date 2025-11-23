@@ -15,7 +15,7 @@ When writing a message, the device is held in one hand and the morse symbols are
 
 When the device is starting up, it plays a short melody that is familiar to all the musicians. When the user sends a message, the device plays another melody.
 
-The program uses queues for the incoming messages. I2C bus is guarded with mutex to prevent simultanious use by the different peripherals.
+The program uses queues for the incoming messages. I2C bus is guarded with mutex to prevent simultaneous use by the different peripherals.
 
 ## Additions to TKJHAT library
 
