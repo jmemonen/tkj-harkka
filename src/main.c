@@ -164,9 +164,8 @@ static void gesture_task(void *arg) {
 
     // We'll eventually display received messages somehow.
     // This stops gesture input while displaying.
-    if (dev_comms_state != RX_STANDBY_STATE) {
-      vTaskDelay(pdMS_TO_TICKS(5));
-      continue;
+    while (dev_comms_state != RX_STANDBY_STATE) {
+      vTaskDelay(pdMS_TO_TICKS(10));
     }
 
     Gesture_t gst = detect_gesture(&motion_data);
@@ -286,7 +285,6 @@ static void output_task(void *arg) {
 
   // Play the lil startup jingle
   play_melody(&the_lick, BUZ_MELODY_TEMPO);
-  play_melody(&the_lick, 180);
 
   vTaskDelay(pdMS_TO_TICKS(600));
   refresh_display();
@@ -295,6 +293,12 @@ static void output_task(void *arg) {
 
   for (;;) {
     if (xQueueReceive(output_queue, &msg, portMAX_DELAY) == pdTRUE) {
+      dev_comms_state = RX_DISPLAY_STATE;
+      if (DEBUG_RX) {
+        usb_serial_print("--> RX_DISPLAY_STATE\r\n");
+        usb_serial_flush();
+      }
+
       char ascii[MSG_BUF_SIZE];
       decode_morse_msg(msg, ascii, MSG_BUF_SIZE);
 
@@ -320,6 +324,10 @@ static void output_task(void *arg) {
 
       refresh_display();
       dev_comms_state = RX_STANDBY_STATE;
+      if (DEBUG_RX) {
+        usb_serial_print("--> RX_STANDBY_STATE\r\n");
+        usb_serial_flush();
+      }
     }
   }
 }
@@ -366,11 +374,6 @@ static void rx_dispatch_task(void *arg) {
 
     push_to_output_queue(rx_buf, rx_buf_len);
 
-    dev_comms_state = RX_STANDBY_STATE; // Let others use rx_buf.
-    if (DEBUG_RX) {
-      usb_serial_print("--> RX_STANDBY_STATE\r\n");
-    }
-
     reset_rx_buf();
   }
 }
@@ -389,16 +392,16 @@ void tud_cdc_rx_cb(uint8_t itf) {
   // | you won't be able to print anymore to CDC0
   // | next time this function is called
 
+  // Don't mess with buffer if a complete message is being processed.
+  if (dev_comms_state == RX_PROCESSING_STATE) {
+    return;
+  }
+
   uint32_t count = tud_cdc_n_read(itf, read_buf, sizeof(read_buf));
   read_buf[count] = '\0';
 
   // Don't process if received on the second cdc interface.
   if (itf != 1) {
-    return;
-  }
-
-  // Don't mess with buffer if a complete message is being processed.
-  if (dev_comms_state == RX_PROCESSING_STATE) {
     return;
   }
 
