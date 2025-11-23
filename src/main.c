@@ -1,3 +1,17 @@
+/**
+ * Computer Systems / Autumn 2025
+ * Final Project: Secret Messages
+ * Github repo: https://github.com/jmemonen/tkj-harkka
+ * 
+ * Authors:
+ * Mikko Memonen, student number: 2500401
+ * https://github.com/Memnonov
+ * 
+ * Jukka Memonen, student number: 2408113
+ * https://github.com/jmemonen
+ * 
+ */
+
 #include <pico/time.h>
 #include <pico/types.h>
 #include <stdbool.h>
