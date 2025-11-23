@@ -44,6 +44,8 @@ static char debug_buf[DEBUG_BUF_SIZE];
 #define EXP_MOV_AVG_ALPHA 0.25
 #define GESTURE_COOLDOWN_DELAY 5
 #define MSG_BUF_SIZE 256
+#define MSG_ACK "ack  \n"
+#define MSG_ACK_LEN 6
 
 // Buzzer stuff
 #define BUZ_MELODY_TEMPO 160
@@ -79,6 +81,7 @@ static SemaphoreHandle_t I2C_mutex;
 // *********** Function prototypes ************************
 
 void send_msg(void);
+void send_ack(void);
 void display_msg(const char *msg); // TODO: Deprecated.
 void debug_print_tx(int res);
 void debug_print_msg_builder(int gst);
@@ -306,9 +309,10 @@ static void output_task(void *arg) {
       }
       vPortFree(msg);
 
+      // TODO: give this its own funtion
       xSemaphoreTake(I2C_mutex, portMAX_DELAY);
       clear_display();
-      write_text_xy(0, 24, "Message has ended");
+      write_text_xy(0, 24, "End of message");
       sleep_ms(500);
       clear_display();
       xSemaphoreGive(I2C_mutex);
@@ -333,7 +337,10 @@ static void rx_dispatch_task(void *arg) {
 
   for (;;) {
     ulTaskNotifyTake(pdTRUE, portMAX_DELAY); // Sleep until notice.
-    dev_comms_state = RX_PROCESSING_STATE;   // Guard the RX buffer
+
+    // Send an ACK to the serial-client.
+    send_ack();
+    dev_comms_state = RX_PROCESSING_STATE; // Guard the RX buffer
     if (DEBUG_RX) {
       usb_serial_print("--> RX_DISPLAY_STATE\r\n");
     }
@@ -416,9 +423,6 @@ void tud_cdc_rx_cb(uint8_t itf) {
     return;
   }
 
-  tud_cdc_n_write(itf, (uint8_t const *)"Message received!\n", 19);
-  tud_cdc_write_flush();
-
   // Notify the dispatcher task a complete message has been received.
   BaseType_t pxHigherPriorityTaskWoken = pdFALSE;
   vTaskNotifyGiveFromISR(rx_task_handle, &pxHigherPriorityTaskWoken);
@@ -481,6 +485,11 @@ void push_to_output_queue(const char *msg, size_t msg_len) {
     }
     usb_serial_flush();
   }
+}
+
+void send_ack(void) {
+  tud_cdc_n_write(CDC_ITF_TX, (uint8_t const *)"-.-  \n", 6);
+  tud_cdc_n_write_flush(CDC_ITF_TX);
 }
 
 // ****************** DEBUGGING UTILITIES **********
