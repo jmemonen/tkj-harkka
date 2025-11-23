@@ -109,3 +109,50 @@ Gesture_t detect_gesture(const motion_data_t *data) {
 
   return GESTURE_NONE;
 }
+
+/**
+ * Tried to implement a sensor fusion to combine accelometer and gyro data
+ * into pitch and roll of the device. Pitch calculation works quite fine
+ * but roll calculation has some issues with latency and quick movements.
+ * We ended up scrapping the idea of using sensor fusion.
+ *  */
+
+/*
+// Sensor fusion
+void sensor_fusion(motion_data_t *data, float alpha, float sample_time) {
+  // Check that given alpha is acceptable
+  if (alpha <= 0 || alpha > 1) {
+    return;
+  }
+
+  float roll_rad = data->roll * DEG_TO_RAD;
+  float pitch_rad = data->pitch * DEG_TO_RAD;
+
+  // Complimentary filter estimates for phi (pitch) and theta (roll)
+  // Roll axis is y-axis and pitch axis is x-axis.
+  // Calculate angle estimates based on accelerometer data:
+  float phi_acc = atan2(data->ax, data->az);
+  float theta_acc = asinf(data->ay);
+  //float theta_acc = atan2(-data->ax, sqrtf(data->ay * data->ay + data->az * data->az));
+
+  // Gyro data in rad/s
+  float p_rps = data->gy * DEG_TO_RAD;
+  float q_rps = data->gx * DEG_TO_RAD;
+  float r_rps = data->gz * DEG_TO_RAD;
+
+  // Transform gyro measurements from body rates to Euler rates
+  float phi_gyro_rps = p_rps + sinf(roll_rad) * tanf(pitch_rad) * q_rps 
+                      + cosf(roll_rad) * tanf(pitch_rad) * r_rps;
+  float theta_gyro_rps = cosf(roll_rad) * q_rps - sin(roll_rad) * r_rps;
+
+  // Combine accelerometer estimates with integral of gyro readings
+  roll_rad = alpha * phi_acc 
+              + (1.0f - alpha) * (roll_rad + (sample_time / 1000.0f) * phi_gyro_rps);
+  pitch_rad = alpha * theta_acc 
+              + (1.0f - alpha) * (pitch_rad + (sample_time / 1000.0f) * theta_gyro_rps);
+
+  data->roll = roll_rad * RAD_TO_DEG;
+  data->pitch = pitch_rad * RAD_TO_DEG;
+}
+
+*/
