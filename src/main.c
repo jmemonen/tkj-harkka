@@ -251,7 +251,7 @@ static void gesture_task(void *arg) {
         }
         send_msg();
         msg_reset(&msg_b);
-        play_melody(&victory_theme, BUZ_SEND_TEMPO);
+
         handle_gesture_input(&cooldown_delay);
       }
       break;
@@ -455,6 +455,11 @@ void send_msg(void) {
   if (msg_b.msg_len > EOM) { // Don't send empties.
     tud_cdc_n_write(CDC_ITF_TX, (uint8_t const *)msg_b.msg_buf, msg_b.msg_len);
     tud_cdc_n_write_flush(CDC_ITF_TX);
+    play_melody(&victory_theme, BUZ_SEND_TEMPO);
+  }
+  else {
+    buzzer_play_tone(BUZ_GEST_FREQ_HIGH, BUZ_GEST_LEN_DASH);
+    buzzer_play_tone(BUZ_GEST_FREQ_LOW, BUZ_GEST_LEN_DASH);
   }
 }
 
@@ -605,7 +610,7 @@ int main() {
   sleep_ms(1000); // Wait some time so initialization of USB and hat is done.
   // init_i2c_default();
   // sleep_ms(1000); // Wait some time so initialization of USB and hat is done.
-  init_red_led();
+  // init_red_led();
 
   if (init_ICM42670() == 0) {
     usb_serial_print("ICM-42670P initialized successfully!\r\n");
@@ -616,6 +621,7 @@ int main() {
 
   // Init the pretty colourful LED and the buzzer
   init_rgb_led();
+  rgb_led_write(2, 0, 0);
   sleep_ms(500);
   init_buzzer();
 
