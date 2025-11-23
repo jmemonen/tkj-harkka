@@ -13,6 +13,7 @@
 #include <tusb.h>
 
 #include "class/cdc/cdc_device.h"
+#include "osal/osal_freertos.h"
 #include "portable.h"
 #include "portmacro.h"
 #include "projdefs.h"
@@ -44,7 +45,7 @@ static char debug_buf[DEBUG_BUF_SIZE];
 #define GESTURE_COOLDOWN_DELAY 5
 #define MSG_BUF_SIZE 256
 
-// Buzzer
+// Buzzer stuff
 #define BUZ_GEST_FREQ_LOW 314
 #define BUZ_GEST_FREQ_HIGH 420
 #define BUZ_GEST_LEN_DOT 25
@@ -55,8 +56,8 @@ static motion_data_t motion_data;
 
 // TX and RX buffers and such.
 static char _msg_buf[MSG_BUF_SIZE];
-static msg_builder_t msg_b;
 static char rx_buf[MSG_BUF_SIZE];
+static msg_builder_t msg_b;
 static size_t rx_buf_len = 0;
 
 // Device state
@@ -66,11 +67,13 @@ static uint8_t gesture_state = STATE_COOLDOWN;
 
 // RX queue for handling received messages.
 #define QUEUE_SIZE 3
-static QueueHandle_t rx_queue = NULL;
 static QueueHandle_t output_queue = NULL;
 
 // Task handles
 static TaskHandle_t rx_task_handle = NULL;
+
+// Mutexes
+static SemaphoreHandle_t I2C_mutex;
 
 // *********** Function prototypes ************************
 
@@ -115,7 +118,12 @@ static void sensorTask(void *arg) {
   }
 
   while (1) {
+
+    // Blocks until the I2C mutex is acquired.
+    xSemaphoreTake(I2C_mutex, portMAX_DELAY);
     read_filtered_motion_data(&motion_data, EXP_MOV_AVG_ALPHA);
+    xSemaphoreGive(I2C_mutex);
+
     if (DEBUG_IMU && motion_data.error) {
       usb_serial_print("There was an error reading motion data!\r\n");
       usb_serial_flush();
@@ -282,8 +290,12 @@ static void output_task(void *arg) {
       }
       char ascii[MSG_BUF_SIZE];
       decode_morse_msg(msg, ascii, MSG_BUF_SIZE);
-      // THIS KILLS THE DEVICE.
-      // write_text_multirow(ascii); 
+
+      // Mutex guarded I2C use.
+      xSemaphoreTake(I2C_mutex, portMAX_DELAY);
+      // write_text_multirow(ascii);
+      xSemaphoreGive(I2C_mutex);
+
       buzzer_play_message(msg);
       if (DEBUG_BUZZER) {
         usb_serial_print("Buzzer done playing. Freed msg*\r\n");
@@ -432,41 +444,24 @@ void display_msg(const char *msg) {
 bool init_queues(void) {
   // Dynamic allocations, but that's how the settings were.
   // Gets freed when you pull the plug...
-  rx_queue = xQueueCreate(QUEUE_SIZE, sizeof(char *));
   output_queue = xQueueCreate(QUEUE_SIZE, sizeof(char *));
 
-  return rx_queue && output_queue;
+  return output_queue != NULL;
 }
 
-// Push the message to the rx_queue for further processing.
+// Push the message to the output queue for further processing.
 // Sends an ack to the sender (which should be a separate thing tbh).
 void push_to_output_queue(const char *msg, size_t msg_len) {
-  if (DEBUG_BUZZER) {
-    usb_serial_print("@ push_to_buzzer_queue\r\n");
-    usb_serial_print(msg);
-    usb_serial_print("\r\n");
-    usb_serial_flush();
-  }
-
-  if (uxQueueSpacesAvailable(rx_queue)) {
+  if (uxQueueSpacesAvailable(output_queue)) {
     // Expecting only human input so the allocations shouldn't get out of hands.
     // They are also limited by the memory available in the queue.
     char *msg_ptr = pvPortMalloc(msg_len * sizeof(char));
 
     if (msg_ptr) {
       memcpy(msg_ptr, msg, msg_len);
-
-      if (DEBUG_BUZZER) {
-        usb_serial_print("msg_ptr is now:\r\n");
-        usb_serial_print(msg_ptr);
-        usb_serial_print("\r\n");
-        usb_serial_flush();
-      }
-
-      xQueueSendToBack(output_queue, &msg_ptr, 0);
-
+      xQueueSendToBack(output_queue, &msg_ptr, portMAX_DELAY);
       if (DEBUG_RX) {
-        usb_serial_print("Pushed msg to buzzer queue\r\n");
+        usb_serial_print("Pushed msg to RX queue\r\n");
       }
     } else { // We give up!
       if (DEBUG_RX) {
@@ -478,7 +473,7 @@ void push_to_output_queue(const char *msg, size_t msg_len) {
 }
 
 // ****************** DEBUGGING UTILITIES **********
-// Extracted from the task handlers to keep them clean.
+// Extracted from the task handlers to keep them cleaner.
 
 void debug_print_tx(int res) {
   if (res == MORSO_OK) {
@@ -573,6 +568,12 @@ int main() {
   msg_init(&msg_b, _msg_buf, MSG_BUF_SIZE);
   if (!init_queues()) {
     usb_serial_print("Failed to initieate RX Queue.");
+  }
+
+  // Initialize mutexes
+  I2C_mutex = xSemaphoreCreateMutex();
+  if (I2C_mutex == NULL) {
+    usb_serial_print("Failed to create I2C_mutex\r\n");
   }
 
   TaskHandle_t gesture, hUSB, sensor, buzzer = NULL;
