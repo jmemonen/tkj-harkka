@@ -374,50 +374,107 @@ void write_text(const char *text) {
 }
 
 void write_text_multirow(const char *text) {
-  clear_display();
+    clear_display();
 
-  int x = 0;
-  int y = 0;
-  int font_w = 6; // px
-  int font_h = 8; // px
-  int row_spacer = 2; // px
-  const uint8_t scale = 1;
-  const char *p = text;
+    int x = 0;
+    int y = 0;
+    int font_w = 6; // px
+    int font_h = 8; // px
+    int row_spacer = 2; // px
+    const uint8_t scale = 1;
+    const char *p = text;
 
-  while (*p) {
-    char word[32];
-    int word_len = 0;
+    while (*p) {
+        char word[32];
+        int word_len = 0;
 
-    // Find next word in the message
-    while (*p && *p != ' ' && word_len < (int)sizeof(word)-1) {
-      word[word_len++] = *p++;
+        // Find next word in the message
+        while (*p && *p != ' ' && word_len < (int)sizeof(word)-1) {
+            word[word_len++] = *p++;
+        }
+
+        // New line if word is too long for the current row
+        if (x + word_len * font_w > 128) {
+            y += font_h + row_spacer;
+            x = 0;
+        }
+        word[word_len] = '\0';
+
+        // Render current word to the off-screen buffer 
+        ssd1306_draw_string(&disp, (uint32_t)x, (uint32_t)y, scale, word);
+        x += word_len * font_w;
+
+        if (*p == ' ') {
+            if (x + font_w < 128) {
+            x += font_w;
+            }
+            else {
+            y += font_h + row_spacer;
+            x = 0;
+            }
+            p++;
+        }
     }
+    // Update the display panel to show the text.
+    ssd1306_show(&disp);
+    // sleep_ms(800);
+}
 
-    // New line if word is too long for the current row
-    if (x + word_len * font_w > 128) {
-      y += font_h + row_spacer;
-      x = 0;
+void write_message_builder(const char *inp_buf, const char *msg_buf, const char c) {
+    clear_display();
+
+    uint32_t x_inp_buf = 42;
+    uint32_t y_inp_buf = 0;
+    uint32_t x_msg_buf = 0;
+    uint32_t y_msg_buf = 20;
+
+    uint32_t x_inp = 100;
+
+    uint8_t font_w = 6; // px
+    uint8_t font_h = 8; // px
+    uint8_t row_spacer = 2; // px
+    const uint8_t scale = 1;
+
+    const char *p = msg_buf;
+
+    // Draw current input to off-screen buffer
+    ssd1306_draw_string(&disp, 0, 0, scale, "Input:");
+    ssd1306_draw_string(&disp, x_inp_buf, y_inp_buf, scale, inp_buf);
+    ssd1306_draw_string(&disp, x_inp, y_inp_buf, 2, &c);
+
+    // Draw message to off-screen buffer    
+    while (*p) {
+        char word[32];
+        int word_len = 0;
+
+        // Find next word in the message
+        while (*p && *p != ' ' && word_len < (int)sizeof(word)-1) {
+            word[word_len++] = *p++;
+        }
+
+        // New line if word is too long for the current row
+        if (x_msg_buf + word_len * font_w > 128) {
+            y_msg_buf += font_h + row_spacer;
+            x_msg_buf = 0;
+        }
+        word[word_len] = '\0';
+
+        // Render current word to the off-screen buffer 
+        ssd1306_draw_string(&disp, x_msg_buf, y_msg_buf, scale, word);
+        x_msg_buf += word_len * font_w;
+
+        if (*p == ' ') {
+            if (x_msg_buf + font_w < 128) {
+            x_msg_buf += font_w;
+            }
+            else {
+            y_msg_buf += font_h + row_spacer;
+            x_msg_buf = 0;
+            }
+            p++;
+        }
     }
-    word[word_len] = '\0';
-
-    // Render current word to the off-screen buffer 
-    ssd1306_draw_string(&disp, (uint32_t)x, (uint32_t)y, scale, word);
-    x += word_len * font_w;
-
-    if (*p == ' ') {
-      if (x + font_w < 128) {
-        x += font_w;
-      }
-      else {
-        y += font_h + row_spacer;
-        x = 0;
-      }
-      p++;
-    }
-  }
-  // Update the display panel to show the text.
-  ssd1306_show(&disp);
-  sleep_ms(800);
+    ssd1306_show(&disp);
 }
 
 /**
