@@ -46,6 +46,7 @@ static char debug_buf[DEBUG_BUF_SIZE];
 #define MSG_BUF_SIZE 256
 
 // Buzzer stuff
+#define BUZ_MELODY_TEMPO 160
 #define BUZ_GEST_FREQ_LOW 314
 #define BUZ_GEST_FREQ_HIGH 420
 #define BUZ_GEST_LEN_DOT 25
@@ -275,7 +276,7 @@ static void output_task(void *arg) {
     usb_serial_flush();
   }
 
-  play_melody(&the_lick, 160);
+  play_melody(&the_lick, BUZ_MELODY_TEMPO);
 
   xSemaphoreTake(I2C_mutex, portMAX_DELAY);
   clear_display();
