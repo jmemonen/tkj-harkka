@@ -86,6 +86,7 @@ void debug_print_rx(uint8_t *buf, char *rx_buf);
 void push_to_output_queue(const char *msg, size_t msg_len);
 void reset_rx_buf(void);
 bool init_queues(void);
+void refresh_display(void);
 
 // *********** FREERTOS TASKS  ****************************
 
@@ -202,6 +203,7 @@ static void gesture_task(void *arg) {
         gesture_state = STATE_COOLDOWN;
         rgb_led_write(0, 0, 2);
         buzzer_play_tone(BUZ_GEST_FREQ_LOW, BUZ_GEST_LEN_DOT);
+        refresh_display();
       }
       break;
 
@@ -213,6 +215,7 @@ static void gesture_task(void *arg) {
         gesture_state = STATE_COOLDOWN;
         rgb_led_write(0, 0, 2);
         buzzer_play_tone(BUZ_GEST_FREQ_LOW, BUZ_GEST_LEN_DASH);
+        refresh_display();
       }
       break;
 
@@ -224,6 +227,7 @@ static void gesture_task(void *arg) {
         gesture_state = STATE_COOLDOWN;
         rgb_led_write(0, 0, 2);
         buzzer_play_tone(BUZ_GEST_FREQ_HIGH, BUZ_GEST_LEN_DOT);
+        refresh_display();
       }
       break;
 
@@ -243,6 +247,7 @@ static void gesture_task(void *arg) {
         cooldown_delay = GESTURE_COOLDOWN_DELAY;
         rgb_led_write(0, 0, 2);
         buzzer_play_tone(BUZ_GEST_FREQ_HIGH, BUZ_GEST_LEN_DASH);
+        refresh_display();
       }
       break;
 
@@ -275,11 +280,10 @@ static void output_task(void *arg) {
     usb_serial_flush();
   }
 
-  play_melody(&the_lick, 160);
+  play_melody(&the_lick, 180);
 
-  xSemaphoreTake(I2C_mutex, portMAX_DELAY);
-  clear_display();
-  xSemaphoreGive(I2C_mutex);
+  vTaskDelay(pdMS_TO_TICKS(600));
+  refresh_display();
 
   char *msg;
 
@@ -309,10 +313,10 @@ static void output_task(void *arg) {
       xSemaphoreTake(I2C_mutex, portMAX_DELAY);
       clear_display();
       write_text_xy(0, 24, "Message has ended");
-      sleep_ms(500);
-      clear_display();
       xSemaphoreGive(I2C_mutex);
 
+      vTaskDelay(pdMS_TO_TICKS(300));
+      refresh_display();
       dev_comms_state = RX_STANDBY_STATE;
     }
   }
@@ -482,6 +486,13 @@ void push_to_output_queue(const char *msg, size_t msg_len) {
     }
     usb_serial_flush();
   }
+}
+
+// Helper function to update the display during inputting message.
+void refresh_display(void) {
+  xSemaphoreTake(I2C_mutex, portMAX_DELAY);
+  write_message_builder(msg_b.inp_buf, msg_b.msg_buf, msg_b.inp);
+  xSemaphoreGive(I2C_mutex);
 }
 
 // ****************** DEBUGGING UTILITIES **********

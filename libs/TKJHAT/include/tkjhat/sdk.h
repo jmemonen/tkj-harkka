@@ -643,6 +643,12 @@ void write_text_xy(int16_t x0, int16_t y0, const char *text);
  */
 void write_text_multirow(const char *text);
 
+
+/** 
+ * @brief Writes input buffer to 1st row and message buffer to 2nd row. 
+ */
+void write_message_builder(const char *inp_buf, const char *msg_buf, const char c);
+
 /**
  * @brief Set the text cursor for subsequent text rendering.
  *
