@@ -1,0 +1,27 @@
+@startuml
+left to right direction
+skinparam dpi 300
+hide empty description
+
+state "START\n(Invalid)" as ROOT
+
+state "E\n." as E
+state "T\n-" as T
+
+state "I\n.." as I
+state "A\n.-" as A
+state "N\n-." as N
+state "M\n--" as M
+
+[*] --> ROOT
+
+ROOT --> E : .
+ROOT --> T : -
+
+E --> I : .
+E --> A : -
+
+T --> N : .
+T --> M : -
+
+@enduml

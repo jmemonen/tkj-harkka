@@ -1,0 +1,24 @@
+@startuml
+left to right direction
+hide empty description
+skinparam dpi 300
+
+state "RX Standby" as STANDBY
+state "RX Processing" as PROCESSING
+state "RX Displaying" as DISPLAY
+
+[*] --> STANDBY
+
+STANDBY : Reads bytes into RX buffer
+
+STANDBY --> PROCESSING : \\n received\nnotify Dispatch task
+
+PROCESSING : Dispatcher reads rx_buf
+PROCESSING : Delegates msg to output task
+PROCESSING --> DISPLAY : Message queued
+
+DISPLAY : Blocks input
+DISPLAY : Display + buzzer playback
+DISPLAY --> STANDBY : Playback done
+
+@enduml

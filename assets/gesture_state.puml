@@ -1,0 +1,16 @@
+@startuml
+left to right direction
+skinparam dpi 300
+hide empty description
+
+state "READY / STANDBY" as READY
+state "COOLDOWN" as COOLDOWN
+
+[*] --> READY
+
+READY --> COOLDOWN : Gesture detected\n(DOT / DASH / SPACE / SEND)
+
+COOLDOWN --> READY : Cooldown complete
+COOLDOWN --> COOLDOWN : Device not in neutral position\nReset cooldown
+
+@enduml
