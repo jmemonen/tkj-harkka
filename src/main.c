@@ -39,13 +39,23 @@ static char debug_buf[DEBUG_BUF_SIZE];
 // *********** GLOBAL VARIABLES AND CONSTANTS *************
 
 #define DEFAULT_STACK_SIZE 2048 // Can be reduced to 1024 if using less memory.
-#define CDC_ITF_TX 1
-#define MOTION_BUF_SIZE 128
-#define EXP_MOV_AVG_ALPHA 0.25
-#define GESTURE_COOLDOWN_DELAY 5
+#define CDC_ITF_TX 1            // Channel to serial-client
+#define DELAY_50_MS 50
+
+// Message buffers etc.
 #define MSG_BUF_SIZE 256
 #define MSG_ACK "ack  \n"
 #define MSG_ACK_LEN 6
+static char _msg_buf[MSG_BUF_SIZE];
+static char rx_buf[MSG_BUF_SIZE];
+static msg_builder_t msg_b;
+static size_t rx_buf_len = 0;
+
+// IMU and gestures
+#define EXP_MOV_AVG_ALPHA 0.25
+#define MOTION_BUF_SIZE 128
+#define GESTURE_COOLDOWN_DELAY 5
+static motion_data_t motion_data;
 
 // Buzzer stuff
 #define BUZ_MELODY_TEMPO 160
@@ -54,21 +64,16 @@ static char debug_buf[DEBUG_BUF_SIZE];
 #define BUZ_GEST_LEN_DOT 25
 #define BUZ_GEST_LEN_DASH 150
 
-// Sensor data
-static motion_data_t motion_data;
-
-// TX and RX buffers and such.
-static char _msg_buf[MSG_BUF_SIZE];
-static char rx_buf[MSG_BUF_SIZE];
-static msg_builder_t msg_b;
-static size_t rx_buf_len = 0;
+// Display
+#define DISPLAY_EOM_X0 0
+#define DISPLAY_EOM_Y0 24
 
 // Device state
 enum comms_state { RX_STANDBY_STATE, RX_PROCESSING_STATE, RX_DISPLAY_STATE };
 static uint8_t dev_comms_state = RX_STANDBY_STATE;
 static uint8_t gesture_state = STATE_COOLDOWN;
 
-// RX queue for handling received messages.
+// Output queue for handling received messages.
 #define QUEUE_SIZE 3
 static QueueHandle_t output_queue = NULL;
 
@@ -80,22 +85,33 @@ static SemaphoreHandle_t I2C_mutex;
 
 // *********** Function prototypes ************************
 
-void send_msg(void);
-void send_ack(void);
-void debug_print_tx(int res);
-void debug_print_msg_builder(int gst);
-void debug_print_gst_state(int gst);
-void debug_print_rx(uint8_t *buf, char *rx_buf);
-void push_to_output_queue(const char *msg, size_t msg_len);
-void reset_rx_buf(void);
-bool init_queues(void);
-void refresh_display(void);
-void display_eom(void);
+// Tasks
+static void sensor_task(void *arg);
+static void usb_task(void *arg);
+static void gesture_task(void *arg);
+static void rx_output_task(void *arg);
+static void rx_dispatch_task(void *arg);
+
+// Helpers
+static void send_msg(void);
+static void send_ack(void);
+static void push_to_output_queue(const char *msg, const size_t msg_len);
+static void reset_rx_buf(void);
+static bool init_queues(void);
+static void refresh_display(void);
+static void display_eom(void);
+static void wait_for_usb_conn(void);
+
+// Debug prints etc.
+static void debug_print_tx(const int res);
+static void debug_print_msg_builder(const int gst);
+static void debug_print_gst_state(const int gst);
+static void debug_print_rx(const uint8_t *buf, const char *rx_buf);
 
 // *********** FREERTOS TASKS  ****************************
 
 // Activates the TinyUSB library.
-static void usbTask(void *arg) {
+static void usb_task(void *arg) {
   (void)arg;
   while (1) {
     tud_task(); // With FreeRTOS wait for events
@@ -103,17 +119,13 @@ static void usbTask(void *arg) {
   }
 }
 
-// Reads the sensors.
-static void sensorTask(void *arg) {
+// Reads the IMU sensor into the motion_data_t struct.
+static void sensor_task(void *arg) {
   (void)arg;
   char buf[MOTION_BUF_SIZE];
 
-  while (!tud_mounted() || !tud_cdc_n_connected(1)) {
-    vTaskDelay(pdMS_TO_TICKS(50));
-  }
-
   if (DEBUG_IMU && usb_serial_connected()) {
-    usb_serial_print("sensorTask started...\r\n");
+    usb_serial_print("Sensor Task started...\r\n");
     usb_serial_flush();
   }
 
@@ -149,9 +161,7 @@ static void sensorTask(void *arg) {
 static void gesture_task(void *arg) {
   (void)arg;
 
-  while (!tud_mounted() || !tud_cdc_n_connected(1)) {
-    vTaskDelay(pdMS_TO_TICKS(50));
-  }
+  wait_for_usb_conn();
 
   if (DEBUG_GESTURE_STATE && usb_serial_connected()) {
     usb_serial_print("gesture_task started...\r\n");
@@ -187,9 +197,8 @@ static void gesture_task(void *arg) {
     }
 
     switch (gst) {
-      // TODO: These are kinda redundant cases, BUT the separation could be
-      // useful later on if more specific actions are needed on different
-      // gestures?
+      // These are kinda redundant, BUT the separation could be useful later on
+      // if more specific actions are eventually needed for different gestures?
     case GESTURE_READY:
       if (gesture_state == STATE_COOLDOWN) {
         gst_read = 1;
@@ -272,11 +281,9 @@ static void gesture_task(void *arg) {
 
 // A consumer of received messages.
 // Handles output with buzzer and the display.
-static void output_task(void *arg) {
+static void rx_output_task(void *arg) {
   (void)arg;
-  while (!tud_mounted() || !tud_cdc_n_connected(1)) {
-    vTaskDelay(pdMS_TO_TICKS(50));
-  }
+  wait_for_usb_conn();
 
   if (DEBUG_BUZZER && usb_serial_connected()) {
     usb_serial_print("Output Task started...\r\n");
@@ -338,9 +345,7 @@ static void output_task(void *arg) {
 static void rx_dispatch_task(void *arg) {
   (void)arg;
 
-  while (!tud_mounted() || !tud_cdc_n_connected(1)) {
-    vTaskDelay(pdMS_TO_TICKS(50));
-  }
+  wait_for_usb_conn();
 
   if (DEBUG_RX && usb_serial_connected()) {
     usb_serial_print("RX Task started...\r\n");
@@ -397,7 +402,7 @@ void tud_cdc_rx_cb(uint8_t itf) {
     return;
   }
 
-  uint32_t count = tud_cdc_n_read(itf, read_buf, sizeof(read_buf));
+  size_t count = tud_cdc_n_read(itf, read_buf, sizeof(read_buf));
   read_buf[count] = '\0';
 
   // Don't process if received on the second cdc interface.
@@ -439,7 +444,13 @@ void tud_cdc_rx_cb(uint8_t itf) {
 }
 
 // ************* HELPER FUNCTIONS ******************
-//
+
+void wait_for_usb_conn(void) {
+  while (!tud_mounted() || !tud_cdc_n_connected(1)) {
+    vTaskDelay(pdMS_TO_TICKS(DELAY_50_MS));
+  }
+}
+
 void reset_rx_buf(void) {
   rx_buf[0] = '\0';
   rx_buf_len = 0;
@@ -464,7 +475,7 @@ bool init_queues(void) {
 
 // Push the message to the output queue for further processing.
 // Sends an ack to the sender (which should be a separate thing tbh).
-void push_to_output_queue(const char *msg, size_t msg_len) {
+void push_to_output_queue(const char *msg, const size_t msg_len) {
   if (uxQueueSpacesAvailable(output_queue)) {
     // Expecting only human input so the allocations shouldn't get out of hands.
     // They are also limited by the memory available in the queue.
@@ -487,7 +498,7 @@ void push_to_output_queue(const char *msg, size_t msg_len) {
 
 // Sends an ACK message to the serial-client.
 void send_ack(void) {
-  tud_cdc_n_write(CDC_ITF_TX, (uint8_t const *)"-.-  \n", 6);
+  tud_cdc_n_write(CDC_ITF_TX, (uint8_t const *)"-.-  \n", MSG_ACK_LEN);
   tud_cdc_n_write_flush(CDC_ITF_TX);
 }
 
@@ -501,14 +512,14 @@ void refresh_display(void) {
 void display_eom(void) {
   xSemaphoreTake(I2C_mutex, portMAX_DELAY);
   clear_display();
-  write_text_xy(0, 24, "Message has ended");
+  write_text_xy(DISPLAY_EOM_X0, DISPLAY_EOM_Y0, "Message has ended");
   xSemaphoreGive(I2C_mutex);
 }
 
 // ****************** DEBUGGING UTILITIES **********
 // Extracted from the task handlers to keep them cleaner.
 
-void debug_print_tx(int res) {
+void debug_print_tx(const int res) {
   if (res == MORSO_OK) {
     snprintf(debug_buf, DEBUG_BUF_SIZE, "Sent msg: %s\r", msg_b.msg_buf);
     usb_serial_print(debug_buf);
@@ -532,7 +543,7 @@ void debug_print_msg_builder(int gst) {
   }
 }
 
-void debug_print_gst_state(int gst) {
+void debug_print_gst_state(const int gst) {
   char *s;
   switch (gst) {
   case GESTURE_DOT:
@@ -615,7 +626,7 @@ int main() {
 
   TaskHandle_t gesture, hUSB, sensor, buzzer = NULL;
 
-  xTaskCreate(usbTask, "usb", 2048, NULL, 3, &hUSB);
+  xTaskCreate(usb_task, "usb", 2048, NULL, 3, &hUSB);
 #if (configNUMBER_OF_CORES > 1)
   vTaskCoreAffinitySet(hUSB, 1u << 0);
 #endif
@@ -636,8 +647,8 @@ int main() {
     return 0;
   }
 
-  if (xTaskCreate(sensorTask, "sensor", DEFAULT_STACK_SIZE, NULL, 2, &sensor) !=
-      pdPASS) {
+  if (xTaskCreate(sensor_task, "sensor", DEFAULT_STACK_SIZE, NULL, 2,
+                  &sensor) != pdPASS) {
     usb_serial_print("Sensor Task creation failed\r\n");
     return 0;
   }
@@ -649,7 +660,7 @@ int main() {
     return 0;
   }
 
-  if (xTaskCreate(output_task, "buzzer", DEFAULT_STACK_SIZE, NULL, 3,
+  if (xTaskCreate(rx_output_task, "buzzer", DEFAULT_STACK_SIZE, NULL, 3,
                   &buzzer)) {
     usb_serial_print("Buzzer Task creation failed\r\n");
   }
