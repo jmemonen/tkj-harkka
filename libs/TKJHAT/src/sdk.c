@@ -423,24 +423,24 @@ void write_text_multirow(const char *text) {
 void write_message_builder(const char *inp_buf, const char *msg_buf, const char c) {
     clear_display();
 
-    uint32_t x_inp_buf = 42;
-    uint32_t y_inp_buf = 0;
+    const uint32_t x_inp_buf = 42; // px
+    const uint32_t y_inp_buf = 0; // px
+    const uint32_t x_inp = 100; // xpx
+    
     uint32_t x_msg_buf = 0;
-    uint32_t y_msg_buf = 20;
-
-    uint32_t x_inp = 100;
-
-    uint8_t font_w = 6; // px
-    uint8_t font_h = 8; // px
-    uint8_t row_spacer = 2; // px
+    uint32_t y_msg_buf = 20;   
+    const uint8_t font_w = 6; // px
+    const uint8_t font_h = 8; // px
+    const uint8_t row_spacer = 2; // px
     const uint8_t scale = 1;
-
     const char *p = msg_buf;
+
+    char letter[] = {c, '\0'};
 
     // Draw current input to off-screen buffer
     ssd1306_draw_string(&disp, 0, 0, scale, "Input:");
     ssd1306_draw_string(&disp, x_inp_buf, y_inp_buf, scale, inp_buf);
-    ssd1306_draw_string(&disp, x_inp, y_inp_buf, 2, &c);
+    ssd1306_draw_string(&disp, x_inp, y_inp_buf, 2, letter);
 
     // Draw message to off-screen buffer    
     while (*p) {
@@ -474,6 +474,7 @@ void write_message_builder(const char *inp_buf, const char *msg_buf, const char 
             p++;
         }
     }
+    // Update the display panel
     ssd1306_show(&disp);
 }
 
