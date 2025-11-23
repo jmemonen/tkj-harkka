@@ -10,14 +10,14 @@
 static void buzzer_task(void *arg) {
   (void)arg;
   
-  play_melody(&the_lick, 160.0f);
-  vTaskDelay(pdMS_TO_TICKS(500));
+  // play_melody(&the_lick, 160.0f);
+  // vTaskDelay(pdMS_TO_TICKS(500));
   
   char msg[] = "- . .-. ...- .  .--- .-  -.- .. .. - --- ...  -.- .- .-.. --- .. ... - .-   ";
 
   for (;;) {
-
-    buzzer_play_message(msg);
+    play_melody(&victory_theme, 260.0f);
+    // buzzer_play_message(msg);
     vTaskDelay(pdMS_TO_TICKS(2000));
   }
 }

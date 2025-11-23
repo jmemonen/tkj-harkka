@@ -38,6 +38,9 @@
 #define NOTE_HALF     4
 #define NOTE_WHOLE    8
 
+#define NOTE_GAP      0
+#define GAP_DURATION  10 // ms
+
 // ----------------------
 // STRUCTS
 // ----------------------
@@ -51,11 +54,16 @@ typedef struct {
   size_t length;
 } melody_t;
 
+// extern so these can be used in main.c
+// while calling the function to play a melody.
 extern note_data_t major_c_scale_notes[];
 extern melody_t major_c_scale;
 
 extern note_data_t the_lick_notes[];
 extern melody_t the_lick;
+
+extern note_data_t victory_theme_notes[];
+extern melody_t victory_theme;
 
 // Plays given melody
 void play_melody(const melody_t *melody, float tempo);
