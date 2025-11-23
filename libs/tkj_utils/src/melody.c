@@ -35,15 +35,39 @@ melody_t the_lick = {
   .length = sizeof(the_lick_notes) / sizeof(note_data_t)
 };
 
+note_data_t victory_theme_notes[] = {
+    { NOTE_C5, NOTE_EIGHT },
+    { NOTE_REST, NOTE_GAP },
+    { NOTE_C5, NOTE_EIGHT },
+    { NOTE_REST, NOTE_GAP },
+    { NOTE_C5, NOTE_EIGHT },
+    { NOTE_REST, NOTE_GAP },
+    { NOTE_C5, 3 * NOTE_EIGHT },
+    { NOTE_GS4, 3 * NOTE_EIGHT },
+    { NOTE_AS4, 3 * NOTE_EIGHT },
+    { NOTE_C5, NOTE_EIGHT },
+    { NOTE_REST, NOTE_EIGHT },
+    { NOTE_AS4, NOTE_EIGHT },
+    { NOTE_C5, 3* NOTE_EIGHT },
+};
+
+melody_t victory_theme = {
+    .notes = victory_theme_notes,
+    .length = sizeof(victory_theme_notes) / sizeof(note_data_t)
+};
+
 void play_melody(const melody_t *melody, float tempo) {
+  // Define length of an eight note in ms based on the tempo
   float eight_note_length_ms = (60000.0f / tempo) * 0.5f;
 
   for (size_t i = 0; i < melody->length; i++) {
     uint32_t freq = melody->notes[i].note_freq;
     uint32_t duration_ms = melody->notes[i].note_length * eight_note_length_ms;
-
-    if (freq == 0) {
-        vTaskDelay(pdMS_TO_TICKS(duration_ms));
+    if (melody->notes[i].note_length == NOTE_GAP) {
+      vTaskDelay(pdMS_TO_TICKS(GAP_DURATION));
+    }
+    else if (freq == 0) {
+      vTaskDelay(pdMS_TO_TICKS(duration_ms));
     }
     else {
       buzzer_play_tone(freq, duration_ms);
