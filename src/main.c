@@ -26,6 +26,7 @@
 #include "morso/morso.h"
 
 // *************** DEBUG **********************************
+
 // Set to 1 to print debug info of different components.
 #define DEBUG_IMU 0
 #define DEBUG_GESTURE_STATE 0
@@ -36,7 +37,7 @@
 #define DEBUG_BUF_SIZE 256
 static char debug_buf[DEBUG_BUF_SIZE];
 
-// *********** GLOBAL VARIABLES AND CONSTANTS *************
+// *********** GLOBALS  *************
 
 #define DEFAULT_STACK_SIZE 2048 // Can be reduced to 1024 if using less memory.
 #define CDC_ITF_TX 1            // Channel to serial-client
@@ -44,8 +45,8 @@ static char debug_buf[DEBUG_BUF_SIZE];
 
 // Message buffers etc.
 #define MSG_BUF_SIZE 256
-#define MSG_ACK "ack  \n"
-#define MSG_ACK_LEN 6
+#define MSG_ACK ".- -.-. -.-  \n"
+#define MSG_ACK_LEN 14
 static char _msg_buf[MSG_BUF_SIZE];
 static char rx_buf[MSG_BUF_SIZE];
 static msg_builder_t msg_b;
@@ -59,6 +60,7 @@ static motion_data_t motion_data;
 
 // Buzzer stuff
 #define BUZ_MELODY_TEMPO 160
+#define BUZ_SEND_TEMPO 260
 #define BUZ_GEST_FREQ_LOW 314
 #define BUZ_GEST_FREQ_HIGH 420
 #define BUZ_GEST_LEN_DOT 25
@@ -78,10 +80,11 @@ static uint8_t gesture_state = STATE_COOLDOWN;
 static QueueHandle_t output_queue = NULL;
 
 // Task handles
-static TaskHandle_t rx_task_handle = NULL;
+static TaskHandle_t rx_dispatch_handle =
+    NULL; // For notifying the rx_dispatcher
 
 // Mutexes
-static SemaphoreHandle_t I2C_mutex;
+static SemaphoreHandle_t I2C_mutex; // A mutex to guard the I2C bus
 
 // *********** Function prototypes ************************
 
@@ -93,17 +96,17 @@ static void rx_output_task(void *arg);
 static void rx_dispatch_task(void *arg);
 
 // Helpers
+static bool init_queues(void);
+static void push_to_output_queue(const char *msg, const size_t msg_len);
+static void notify_dispatch_task(void);
 static void send_msg(void);
 static void send_ack(void);
-static void push_to_output_queue(const char *msg, const size_t msg_len);
 static void reset_rx_buf(void);
-static bool init_queues(void);
+static void append_to_rx_buf(const uint8_t *buf, size_t len, bool *eom);
 static void refresh_display(void);
 static void display_eom(void);
 static void wait_for_usb_conn(void);
 static void handle_gesture_input(size_t *cooldown_delay);
-static void notify_dispatch_task(void);
-static void append_to_rx_buf(const uint8_t *buf, size_t len, bool *eom);
 
 // Debug prints etc.
 static void debug_print_tx(const int res);
@@ -167,7 +170,7 @@ static void gesture_task(void *arg) {
   wait_for_usb_conn();
 
   if (DEBUG_GESTURE_STATE && usb_serial_connected()) {
-    usb_serial_print("gesture_task started...\r\n");
+    usb_serial_print("Gesture Task started...\r\n");
     usb_serial_flush();
   }
 
@@ -175,7 +178,6 @@ static void gesture_task(void *arg) {
 
   for (;;) {
 
-    // We'll eventually display received messages somehow.
     // This stops gesture input while displaying.
     while (dev_comms_state != RX_STANDBY_STATE) {
       vTaskDelay(pdMS_TO_TICKS(10));
@@ -200,8 +202,9 @@ static void gesture_task(void *arg) {
     }
 
     switch (gst) {
-      // These are kinda redundant, BUT the separation could be useful later on
-      // if more specific actions are eventually needed for different gestures?
+      // These are somewhat redundant, BUT the separation could be useful later
+      // on if more specific actions are eventually needed for different
+      // gestures?
     case GESTURE_READY:
       if (gesture_state == STATE_COOLDOWN) {
         gst_read = 1;
@@ -248,7 +251,7 @@ static void gesture_task(void *arg) {
         }
         send_msg();
         msg_reset(&msg_b);
-        buzzer_play_tone(BUZ_GEST_FREQ_HIGH, BUZ_GEST_LEN_DASH);
+        play_melody(&victory_theme, BUZ_SEND_TEMPO);
         handle_gesture_input(&cooldown_delay);
       }
       break;
@@ -440,7 +443,7 @@ void reset_rx_buf(void) {
 // Wakes up the dispatch task to process a message in the RX buffer.
 static void notify_dispatch_task(void) {
   BaseType_t pxHigherPriorityTaskWoken = pdFALSE;
-  vTaskNotifyGiveFromISR(rx_task_handle, &pxHigherPriorityTaskWoken);
+  vTaskNotifyGiveFromISR(rx_dispatch_handle, &pxHigherPriorityTaskWoken);
   if (pxHigherPriorityTaskWoken) {
     portYIELD_FROM_ISR(pxHigherPriorityTaskWoken);
   }
@@ -662,7 +665,7 @@ int main() {
   }
 
   result = xTaskCreate(rx_dispatch_task, "rx_dispatch", DEFAULT_STACK_SIZE,
-                       NULL, 2, &rx_task_handle);
+                       NULL, 2, &rx_dispatch_handle);
   if (result != pdPASS) {
     usb_serial_print("RX Dispatcher Task creation failed\r\n");
     return 0;
