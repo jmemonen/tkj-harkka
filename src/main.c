@@ -275,7 +275,11 @@ static void output_task(void *arg) {
     usb_serial_flush();
   }
 
-  play_melody(&the_lick, 120);
+  play_melody(&the_lick, 160);
+
+  xSemaphoreTake(I2C_mutex, portMAX_DELAY);
+  clear_display();
+  xSemaphoreGive(I2C_mutex);
 
   char *msg;
 
@@ -293,7 +297,7 @@ static void output_task(void *arg) {
 
       // Mutex guarded I2C use.
       xSemaphoreTake(I2C_mutex, portMAX_DELAY);
-      // write_text_multirow(ascii);
+      write_text_multirow(ascii);
       xSemaphoreGive(I2C_mutex);
 
       buzzer_play_message(msg);
@@ -301,6 +305,14 @@ static void output_task(void *arg) {
         usb_serial_print("Buzzer done playing. Freed msg*\r\n");
       }
       vPortFree(msg);
+
+      xSemaphoreTake(I2C_mutex, portMAX_DELAY);
+      clear_display();
+      write_text_xy(0, 24, "Message has ended");
+      sleep_ms(500);
+      clear_display();
+      xSemaphoreGive(I2C_mutex);
+
       dev_comms_state = RX_STANDBY_STATE;
     }
   }
@@ -547,8 +559,8 @@ int main() {
   }*/
   init_hat_sdk();
   sleep_ms(1000); // Wait some time so initialization of USB and hat is done.
-  init_i2c_default();
-  sleep_ms(1000); // Wait some time so initialization of USB and hat is done.
+  // init_i2c_default();
+  // sleep_ms(1000); // Wait some time so initialization of USB and hat is done.
   init_red_led();
 
   if (init_ICM42670() == 0) {
@@ -563,6 +575,10 @@ int main() {
   sleep_ms(500);
   rgb_led_write(0, 0, 0);
   init_buzzer();
+
+  init_display();
+  clear_display();
+  write_text_xy(0, 24, "Starting up...");
 
   // Initializations for data structures.
   msg_init(&msg_b, _msg_buf, MSG_BUF_SIZE);

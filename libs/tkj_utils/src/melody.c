@@ -26,8 +26,8 @@ note_data_t the_lick_notes[] = {
   { NOTE_G4, NOTE_EIGHT },
   { NOTE_E4, NOTE_QUARTER },
   { NOTE_C4, NOTE_EIGHT },
-  { NOTE_D4, NOTE_QUARTER + NOTE_HALF },
-  { NOTE_REST, NOTE_EIGHT + NOTE_QUARTER}
+  { NOTE_D4, NOTE_QUARTER },
+  { NOTE_REST, NOTE_QUARTER}
 };
 
 melody_t the_lick = {

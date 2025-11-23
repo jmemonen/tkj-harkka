@@ -4,7 +4,7 @@
 #include "tkj_utils/message_output.h"
 #include "tkjhat/ssd1306.h"
 
-#define MORSE_CODE_UNIT       80 // Morse code unit lenght
+#define MORSE_CODE_UNIT       60 // Morse code unit lenght
 #define DOT_BUZZ_DURATION     (MORSE_CODE_UNIT * 1)
 #define DASH_BUZZ_DURATION    (MORSE_CODE_UNIT * 3)
 #define INTRA_CHAR_PAUSE      (MORSE_CODE_UNIT * 1) // Pause duration between dots/dashes inside a character
