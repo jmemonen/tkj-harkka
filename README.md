@@ -1,5 +1,7 @@
 ## Computer Systems / Autumn 2025, Final Project
 
+![Browse items](assets/demo.mp4)
+
 Authors:
 Mikko Memonen
 https://github.com/Memnonov
