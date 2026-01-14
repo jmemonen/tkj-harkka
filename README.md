@@ -1,6 +1,6 @@
 ## Computer Systems / Autumn 2025, Final Project
 
-![Device Demo](assets/demo.mp4)
+![Device Demo](assets/demo.gif)
 
 Authors:
 Mikko Memonen
